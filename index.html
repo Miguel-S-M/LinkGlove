@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LinkGlove - Central LIBRAS</title>
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --card-bg: #1e293b;
+      --accent: #38bdf8;
+      --text: #f8fafc;
+      --subtext: #94a3b8;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text);
+      text-align: center;
+      padding: 20px;
+      margin: 0;
+    }
+
+    header { margin-bottom: 25px; }
+    h1 { color: var(--accent); margin-bottom: 5px; font-size: 2.2rem; }
+    p { color: var(--subtext); }
+
+    .btn {
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.3s;
+      margin: 5px;
+    }
+    .btn:hover { background-color: #1d4ed8; }
+    .btn-clear { background-color: #ef4444; }
+    .btn-clear:hover { background-color: #dc2626; }
+    .btn-audio { background-color: #10b981; }
+    .btn-audio.muted { background-color: #64748b; }
+
+    .status-bar {
+      margin: 15px 0;
+      font-weight: 500;
+      color: #38bdf8;
+    }
+
+    .main-container {
+      max-width: 900px;
+      margin: 0 auto;
+      display: grid;
+      gap: 20px;
+    }
+
+    .display-box {
+      background-color: var(--card-bg);
+      border: 2px solid #334155;
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .current-letter {
+      font-size: 72px;
+      font-weight: bold;
+      color: #4ade80;
+      margin: 10px 0;
+    }
+
+    .word-box {
+      font-size: 26px;
+      letter-spacing: 2px;
+      color: #f1f5f9;
+      background: #0f172a;
+      padding: 12px;
+      border-radius: 8px;
+      min-height: 40px;
+      margin-bottom: 15px;
+    }
+
+    .translation-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 15px;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border-radius: 8px;
+      padding: 15px;
+      border-left: 4px solid var(--accent);
+      text-align: left;
+    }
+    .card h3 { margin: 0 0 8px 0; font-size: 13px; color: var(--subtext); }
+    .card p { margin: 0; font-size: 18px; font-weight: bold; color: var(--text); }
+
+    .section-title {
+      font-size: 1.4rem;
+      color: var(--accent);
+      margin-top: 30px;
+      margin-bottom: 15px;
+      text-align: left;
+      border-bottom: 2px solid #334155;
+      padding-bottom: 5px;
+    }
+
+    .alphabet-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+      gap: 10px;
+      background: var(--card-bg);
+      padding: 15px;
+      border-radius: 12px;
+    }
+
+    .letter-card {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 10px;
+      font-weight: bold;
+      font-size: 18px;
+      color: var(--accent);
+    }
+
+    .video-container {
+      position: relative;
+      padding-bottom: 56.25%; /* Aspect Ratio 16:9 */
+      height: 0;
+      overflow: hidden;
+      border-radius: 12px;
+      background: var(--card-bg);
+    }
+    .video-container iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>LinkGlove 🖐️</h1>
+    <p>Tradutor de LIBRAS com Leitura por Voz e Recursos Educativos</p>
+  </header>
+
+  <div class="main-container">
+    
+    <!-- Painel de Conexão e Controles -->
+    <div>
+      <button class="btn" onclick="conectarBLE()">🔗 Conectar Luva BLE</button>
+      <button id="btnVoz" class="btn btn-audio" onclick="alternarAudio()">🔊 Voz: Ativada</button>
+      <button class="btn btn-clear" onclick="limparTexto()">🗑️ Limpar</button>
+      <div id="status" class="status-bar">Status: Desconectado</div>
+    </div>
+
+    <!-- Exibição das Leituras da Luva -->
+    <div class="display-box">
+      <div>Gesto Detectado:</div>
+      <div class="current-letter" id="letraAtual">-</div>
+      <div>Texto / Palavra Formada:</div>
+      <div class="word-box" id="palavraFormada">...</div>
+    </div>
+
+    <!-- Cards de Tradução nos 4 Idiomas -->
+    <div class="translation-grid">
+      <div class="card" style="border-color: #009c3b;">
+        <h3>🇧🇷 PORTUGUÊS</h3>
+        <p id="tradPT">-</p>
+      </div>
+      <div class="card" style="border-color: #ffcc00;">
+        <h3>🇪🇸 ESPANHOL</h3>
+        <p id="tradES">-</p>
+      </div>
+      <div class="card" style="border-color: #009246;">
+        <h3>🇮🇹 ITALIANO</h3>
+        <p id="tradIT">-</p>
+      </div>
+      <div class="card" style="border-color: #dd0000;">
+        <h3>🇩🇪 ALEMÃO</h3>
+        <p id="tradDE">-</p>
+      </div>
+    </div>
+
+    <!-- Seção do Alfabeto Manual de LIBRAS -->
+    <div class="section-title">🔤 Guia do Alfabeto Manual (Datilologia)</div>
+    <div class="alphabet-grid" id="gridAlfabeto">
+      <!-- Gerado via JavaScript -->
+    </div>
+
+    <!-- Seção de Vídeo Educativo -->
+    <div class="section-title">📺 Videoaula de LIBRAS (Conteúdo Educacional / Governo)</div>
+    <div class="video-container">
+      <!-- Player incorporado da TV Inês / Conteúdo didático em LIBRAS -->
+      <iframe src="https://www.youtube.com/embed/videoseries?list=PL2pBqf3BOnPlC9mXat233eD04SThsT44J" title="Curso de LIBRAS" allowfullscreen></iframe>
+    </div>
+
+  </div>
+
+  <script>
+    const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+    const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+    let textoAcumulado = "";
+    let audioAtivo = true;
+
+    // Dicionário Multilíngue (PT, ES, IT, DE)
+    const dicionario = {
+      "A": { pt: "Letra A", es: "Letra A", it: "Lettera A", de: "Buchstabe A" },
+      "B": { pt: "Letra B", es: "Letra B", it: "Lettera B", de: "Buchstabe B" },
+      "C": { pt: "Letra C", es: "Letra C", it: "Lettera C", de: "Buchstabe C" },
+      "D": { pt: "Letra D", es: "Letra D", it: "Lettera D", de: "Buchstabe D" },
+      "E": { pt: "Letra E", es: "Letra E", it: "Lettera E", de: "Buchstabe E" },
+      "I": { pt: "Letra I", es: "Letra I", it: "Lettera I", de: "Buchstabe I" },
+      "L": { pt: "Letra L", es: "Letra L", it: "Lettera L", de: "Buchstabe L" },
+      "M": { pt: "Letra M", es: "Letra M", it: "Lettera M", de: "Buchstabe M" },
+      "N": { pt: "Letra N", es: "Letra N", it: "Lettera N", de: "Buchstabe N" },
+      "U": { pt: "Letra U", es: "Letra U", it: "Lettera U", de: "Buchstabe U" },
+      "W": { pt: "Letra W", es: "Letra W", it: "Lettera W", de: "Buchstabe W" },
+      "Y": { pt: "Letra Y", es: "Letra Y", it: "Lettera Y", de: "Buchstabe Y" },
+
+      // Palavras de Exemplo
+      "OI": { pt: "Oi / Olá", es: "Hola", it: "Ciao", de: "Hallo" },
+      "BOM": { pt: "Bom", es: "Bueno", it: "Buono", de: "Gut" },
+      "SIM": { pt: "Sim", es: "Sí", it: "Sì", de: "Ja" },
+      "NAO": { pt: "Não", es: "No", it: "No", de: "Nein" }
+    };
+
+    // Renderizar a Tabela do Alfabeto
+    const alfabeto = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+    const gridAlfabeto = document.getElementById("gridAlfabeto");
+    alfabeto.forEach(letra => {
+      const card = document.createElement("div");
+      card.className = "letter-card";
+      card.innerText = letra;
+      gridAlfabeto.appendChild(card);
+    });
+
+    async function conectarBLE() {
+      try {
+        document.getElementById('status').innerText = "Status: Procurando luva...";
+        
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ name: 'LinkGlove-LIBRAS' }],
+          optionalServices: [SERVICE_UUID]
+        });
+
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        const characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+        await characteristic.startNotifications();
+        characteristic.addEventListener('characteristicvaluechanged', tratarDados);
+
+        document.getElementById('status').innerText = "Status: 🟢 Conectado ao LinkGlove";
+      } catch (error) {
+        console.error(error);
+        document.getElementById('status').innerText = "Status: ❌ Falha na conexão";
+      }
+    }
+
+    function tratarDados(event) {
+      const decoder = new TextDecoder('utf-8');
+      const letra = decoder.decode(event.target.value).trim();
+
+      document.getElementById('letraAtual').innerText = letra;
+      textoAcumulado += letra;
+      document.getElementById('palavraFormada').innerText = textoAcumulado;
+
+      atualizarTraducoes(textoAcumulado, letra);
+
+      // Reproduz o áudio com a pronúncia do caractere/palavra
+      if (audioAtivo) {
+        falarTexto(letra);
+      }
+    }
+
+    function atualizarTraducoes(palavra, ultimaLetra) {
+      if (dicionario[palavra]) {
+        document.getElementById('tradPT').innerText = dicionario[palavra].pt;
+        document.getElementById('tradES').innerText = dicionario[palavra].es;
+        document.getElementById('tradIT').innerText = dicionario[palavra].it;
+        document.getElementById('tradDE').innerText = dicionario[palavra].de;
+      } else if (dicionario[ultimaLetra]) {
+        document.getElementById('tradPT').innerText = dicionario[ultimaLetra].pt;
+        document.getElementById('tradES').innerText = dicionario[ultimaLetra].es;
+        document.getElementById('tradIT').innerText = dicionario[ultimaLetra].it;
+        document.getElementById('tradDE').innerText = dicionario[ultimaLetra].de;
+      } else {
+        document.getElementById('tradPT').innerText = palavra;
+        document.getElementById('tradES').innerText = palavra;
+        document.getElementById('tradIT').innerText = palavra;
+        document.getElementById('tradDE').innerText = palavra;
+      }
+    }
+
+    // Função de Síntese de Voz (Text-to-Speech)
+    function falarTexto(texto) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // Cancela áudio anterior para não encavalar
+        const utterance = new SpeechSynthesisUtterance(texto);
+        utterance.lang = 'pt-BR';
+        utterance.rate = 1.1; // Velocidade da fala
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    function alternarAudio() {
+      audioAtivo = !audioAtivo;
+      const btn = document.getElementById('btnVoz');
+      if (audioAtivo) {
+        btn.innerText = "🔊 Voz: Ativada";
+        btn.classList.remove('muted');
+      } else {
+        btn.innerText = "🔇 Voz: Desativada";
+        btn.classList.add('muted');
+      }
+    }
+
+    function limparTexto() {
+      textoAcumulado = "";
+      document.getElementById('palavraFormada').innerText = "...";
+      document.getElementById('letraAtual').innerText = "-";
+      document.getElementById('tradPT').innerText = "-";
+      document.getElementById('tradES').innerText = "-";
+      document.getElementById('tradIT').innerText = "-";
+      document.getElementById('tradDE').innerText = "-";
+    }
+  </script>
+</body>
+</html>
