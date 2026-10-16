@@ -1,339 +1,235 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LinkGlove - Central LIBRAS</title>
-  <style>
-    :root {
-      --bg-dark: #0f172a;
-      --card-bg: #1e293b;
-      --accent: #38bdf8;
-      --text: #f8fafc;
-      --subtext: #94a3b8;
-    }
-
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: var(--bg-dark);
-      color: var(--text);
-      text-align: center;
-      padding: 20px;
-      margin: 0;
-    }
-
-    header { margin-bottom: 25px; }
-    h1 { color: var(--accent); margin-bottom: 5px; font-size: 2.2rem; }
-    p { color: var(--subtext); }
-
-    .btn {
-      background-color: #2563eb;
-      color: white;
-      border: none;
-      padding: 12px 24px;
-      font-size: 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: bold;
-      transition: 0.3s;
-      margin: 5px;
-    }
-    .btn:hover { background-color: #1d4ed8; }
-    .btn-clear { background-color: #ef4444; }
-    .btn-clear:hover { background-color: #dc2626; }
-    .btn-audio { background-color: #10b981; }
-    .btn-audio.muted { background-color: #64748b; }
-
-    .status-bar {
-      margin: 15px 0;
-      font-weight: 500;
-      color: #38bdf8;
-    }
-
-    .main-container {
-      max-width: 900px;
-      margin: 0 auto;
-      display: grid;
-      gap: 20px;
-    }
-
-    .display-box {
-      background-color: var(--card-bg);
-      border: 2px solid #334155;
-      border-radius: 12px;
-      padding: 20px;
-    }
-
-    .current-letter {
-      font-size: 72px;
-      font-weight: bold;
-      color: #4ade80;
-      margin: 10px 0;
-    }
-
-    .word-box {
-      font-size: 26px;
-      letter-spacing: 2px;
-      color: #f1f5f9;
-      background: #0f172a;
-      padding: 12px;
-      border-radius: 8px;
-      min-height: 40px;
-      margin-bottom: 15px;
-    }
-
-    .translation-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-      gap: 15px;
-    }
-
-    .card {
-      background-color: var(--card-bg);
-      border-radius: 8px;
-      padding: 15px;
-      border-left: 4px solid var(--accent);
-      text-align: left;
-    }
-    .card h3 { margin: 0 0 8px 0; font-size: 13px; color: var(--subtext); }
-    .card p { margin: 0; font-size: 18px; font-weight: bold; color: var(--text); }
-
-    .section-title {
-      font-size: 1.4rem;
-      color: var(--accent);
-      margin-top: 30px;
-      margin-bottom: 15px;
-      text-align: left;
-      border-bottom: 2px solid #334155;
-      padding-bottom: 5px;
-    }
-
-    .alphabet-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
-      gap: 10px;
-      background: var(--card-bg);
-      padding: 15px;
-      border-radius: 12px;
-    }
-
-    .letter-card {
-      background: #0f172a;
-      border: 1px solid #334155;
-      border-radius: 6px;
-      padding: 10px;
-      font-weight: bold;
-      font-size: 18px;
-      color: var(--accent);
-    }
-
-    .video-container {
-      position: relative;
-      padding-bottom: 56.25%; /* Aspect Ratio 16:9 */
-      height: 0;
-      overflow: hidden;
-      border-radius: 12px;
-      background: var(--card-bg);
-    }
-    .video-container iframe {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      border: 0;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>LinkGlove – Luva tradutora de LIBRAS</title>
+<style>
+:root{--bg:#0d1024;--surf:#161a36;--surf2:#1e2347;--line:#2c3260;--tx:#eef0fb;--mut:#9aa1cc;--acc:#ffb454;--ok:#5eead4;--bad:#ff7a8a}
+*{box-sizing:border-box;margin:0}
+html{background:var(--bg)}
+body{font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--tx);line-height:1.5;padding:16px;max-width:1100px;margin:0 auto}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:8px 0 20px}
+h1{font-size:1.6rem;letter-spacing:-.02em}
+h1 small{display:block;font-size:.85rem;font-weight:400;color:var(--mut);letter-spacing:0}
+h2{font-size:1.15rem;margin-bottom:12px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--surf2);color:var(--tx);padding:10px 16px;border-radius:10px}
+button:hover{border-color:var(--acc)}
+button:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.primary{background:var(--acc);color:#241600;border-color:var(--acc);font-weight:700}
+#status{padding:8px 14px;border-radius:999px;background:var(--surf);border:1px solid var(--line);font-weight:600}
+#status.on{color:var(--ok);border-color:var(--ok)}
+#status.off{color:var(--bad)}
+section{background:var(--surf);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:18px}
+.main{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:18px}
+.big{background:var(--bg);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;min-height:220px;text-align:center}
+.big span{font-size:clamp(4rem,18vw,8rem);font-weight:800;line-height:1;color:var(--acc);word-break:break-all}
+.big small{color:var(--mut);margin-top:8px}
+textarea{width:100%;min-height:150px;resize:vertical;background:var(--bg);color:var(--tx);border:1px solid var(--line);border-radius:12px;padding:12px;font:inherit;font-size:1.3rem}
+.tr{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.card{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:14px}
+.card h3{font-size:.95rem;margin-bottom:6px}
+.card p{font-size:1.2rem;min-height:2.4em;overflow-wrap:anywhere}
+.card small{color:var(--mut)}
+.alpha{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:8px}
+.alpha div{background:var(--bg);border:1px solid var(--line);border-radius:10px;text-align:center;padding:12px 0;font-size:1.5rem;font-weight:700}
+.alpha div.hit{background:var(--acc);color:#241600;border-color:var(--acc)}
+.video{position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:var(--bg);border:1px solid var(--line)}
+.video iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;text-align:center;padding:16px;color:var(--mut)}
+input{flex:1;min-width:200px;background:var(--bg);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit}
+a{color:var(--acc)}
+#warn{display:none;background:#3a1d2a;border:1px solid var(--bad);padding:10px 14px;border-radius:10px;margin-bottom:18px}
+@media(max-width:720px){.main{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
 </head>
 <body>
-
-  <header>
-    <h1>LinkGlove 🖐️</h1>
-    <p>Tradutor de LIBRAS com Leitura por Voz e Recursos Educativos</p>
-  </header>
-
-  <div class="main-container">
-    
-    <!-- Painel de Conexão e Controles -->
-    <div>
-      <button class="btn" onclick="conectarBLE()">🔗 Conectar Luva BLE</button>
-      <button id="btnVoz" class="btn btn-audio" onclick="alternarAudio()">🔊 Voz: Ativada</button>
-      <button class="btn btn-clear" onclick="limparTexto()">🗑️ Limpar</button>
-      <div id="status" class="status-bar">Status: Desconectado</div>
-    </div>
-
-    <!-- Exibição das Leituras da Luva -->
-    <div class="display-box">
-      <div>Gesto Detectado:</div>
-      <div class="current-letter" id="letraAtual">-</div>
-      <div>Texto / Palavra Formada:</div>
-      <div class="word-box" id="palavraFormada">...</div>
-    </div>
-
-    <!-- Cards de Tradução nos 4 Idiomas -->
-    <div class="translation-grid">
-      <div class="card" style="border-color: #009c3b;">
-        <h3>🇧🇷 PORTUGUÊS</h3>
-        <p id="tradPT">-</p>
-      </div>
-      <div class="card" style="border-color: #ffcc00;">
-        <h3>🇪🇸 ESPANHOL</h3>
-        <p id="tradES">-</p>
-      </div>
-      <div class="card" style="border-color: #009246;">
-        <h3>🇮🇹 ITALIANO</h3>
-        <p id="tradIT">-</p>
-      </div>
-      <div class="card" style="border-color: #dd0000;">
-        <h3>🇩🇪 ALEMÃO</h3>
-        <p id="tradDE">-</p>
-      </div>
-    </div>
-
-    <!-- Seção do Alfabeto Manual de LIBRAS -->
-    <div class="section-title">🔤 Guia do Alfabeto Manual (Datilologia)</div>
-    <div class="alphabet-grid" id="gridAlfabeto">
-      <!-- Gerado via JavaScript -->
-    </div>
-
-    <!-- Seção de Vídeo Educativo -->
-    <div class="section-title">📺 Videoaula de LIBRAS (Conteúdo Educacional / Governo)</div>
-    <div class="video-container">
-      <!-- Player incorporado da TV Inês / Conteúdo didático em LIBRAS -->
-      <iframe src="https://www.youtube.com/embed/videoseries?list=PL2pBqf3BOnPlC9mXat233eD04SThsT44J" title="Curso de LIBRAS" allowfullscreen></iframe>
-    </div>
-
+<header>
+  <h1>LinkGlove<small>Luva inteligente tradutora de LIBRAS (ESP32)</small></h1>
+  <div class="row">
+    <span id="status" class="off">❌ Desconectado</span>
+    <button id="btnConn" class="primary">Conectar via Bluetooth</button>
   </div>
+</header>
+<div id="warn"></div>
 
-  <script>
-    const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
-    const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+<section>
+  <div class="main">
+    <div class="big" aria-live="polite">
+      <span id="letter">–</span>
+      <small>Letra / gesto detectado</small>
+    </div>
+    <div>
+      <h2>Texto formado</h2>
+      <textarea id="text" aria-label="Texto formado pela luva" placeholder="As letras recebidas da luva aparecem aqui..."></textarea>
+      <div class="row" style="margin-top:10px">
+        <button id="btnClear">Limpar Texto</button>
+        <button id="btnVoice">🔊 Voz: Ativada</button>
+        <button id="btnSpeakAll">Ler texto</button>
+      </div>
+    </div>
+  </div>
+</section>
 
-    let textoAcumulado = "";
-    let audioAtivo = true;
+<section>
+  <h2>Tradução em tempo real</h2>
+  <div class="tr" id="tr"></div>
+</section>
 
-    // Dicionário Multilíngue (PT, ES, IT, DE)
-    const dicionario = {
-      "A": { pt: "Letra A", es: "Letra A", it: "Lettera A", de: "Buchstabe A" },
-      "B": { pt: "Letra B", es: "Letra B", it: "Lettera B", de: "Buchstabe B" },
-      "C": { pt: "Letra C", es: "Letra C", it: "Lettera C", de: "Buchstabe C" },
-      "D": { pt: "Letra D", es: "Letra D", it: "Lettera D", de: "Buchstabe D" },
-      "E": { pt: "Letra E", es: "Letra E", it: "Lettera E", de: "Buchstabe E" },
-      "I": { pt: "Letra I", es: "Letra I", it: "Lettera I", de: "Buchstabe I" },
-      "L": { pt: "Letra L", es: "Letra L", it: "Lettera L", de: "Buchstabe L" },
-      "M": { pt: "Letra M", es: "Letra M", it: "Lettera M", de: "Buchstabe M" },
-      "N": { pt: "Letra N", es: "Letra N", it: "Lettera N", de: "Buchstabe N" },
-      "U": { pt: "Letra U", es: "Letra U", it: "Lettera U", de: "Buchstabe U" },
-      "W": { pt: "Letra W", es: "Letra W", it: "Lettera W", de: "Buchstabe W" },
-      "Y": { pt: "Letra Y", es: "Letra Y", it: "Lettera Y", de: "Buchstabe Y" },
+<section>
+  <h2>Alfabeto manual (A–Z)</h2>
+  <div class="alpha" id="alpha"></div>
+</section>
 
-      // Palavras de Exemplo
-      "OI": { pt: "Oi / Olá", es: "Hola", it: "Ciao", de: "Hallo" },
-      "BOM": { pt: "Bom", es: "Bueno", it: "Buono", de: "Gut" },
-      "SIM": { pt: "Sim", es: "Sí", it: "Sì", de: "Ja" },
-      "NAO": { pt: "Não", es: "No", it: "No", de: "Nein" }
-    };
+<section>
+  <h2>Videoaulas de LIBRAS</h2>
+  <div class="video" id="video"></div>
+  <div class="row" style="margin-top:10px">
+    <input id="plUrl" placeholder="Cole o link de uma playlist do YouTube (…list=PL…)" aria-label="Link da playlist">
+    <button id="btnPl">Carregar playlist</button>
+  </div>
+</section>
 
-    // Renderizar a Tabela do Alfabeto
-    const alfabeto = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-    const gridAlfabeto = document.getElementById("gridAlfabeto");
-    alfabeto.forEach(letra => {
-      const card = document.createElement("div");
-      card.className = "letter-card";
-      card.innerText = letra;
-      gridAlfabeto.appendChild(card);
-    });
+<script>
+// ---- Configuração ----
+const DEVICE_NAME = 'LinkGlove-LIBRAS';
+const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+const CHAR_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+// Cole aqui o ID da playlist (parte depois de "list=") para já abrir carregada:
+const PLAYLIST_ID = '';
 
-    async function conectarBLE() {
-      try {
-        document.getElementById('status').innerText = "Status: Procurando luva...";
-        
-        const device = await navigator.bluetooth.requestDevice({
-          filters: [{ name: 'LinkGlove-LIBRAS' }],
-          optionalServices: [SERVICE_UUID]
-        });
+// ---- Dados: nome das letras em PT | ES | IT | DE | EN ----
+const LANGS = [['🇧🇷','Português','pt-BR'],['🇪🇸','Espanhol','es-ES'],['🇮🇹','Italiano','it-IT'],['🇩🇪','Alemão','de-DE'],['🇬🇧','Inglês','en-US']];
+const LN = ('á,a,a,ah,ay|bê,be,bi,beh,bee|cê,ce,ci,tseh,see|dê,de,di,deh,dee|é,e,e,eh,ee|éfe,efe,effe,eff,eff|gê,ge,gi,geh,jee|agá,hache,acca,hah,aych|i,i,i,ih,eye|jota,jota,i lunga,jott,jay|cá,ka,cappa,kah,kay|éle,ele,elle,ell,el|ême,eme,emme,emm,em|êne,ene,enne,enn,en|ó,o,o,oh,oh|pê,pe,pi,peh,pee|quê,cu,cu,kuh,cue|érre,erre,erre,err,ar|ésse,ese,esse,ess,ess|tê,te,ti,teh,tee|u,u,u,uh,you|vê,uve,vu,fau,vee|dáblio,uve doble,doppia vu,weh,double-u|xis,equis,ics,iks,ex|ípsilon,i griega,ipsilon,üpsilon,why|zê,zeta,zeta,tset,zee').split('|').map(s=>s.split(','));
 
-        const server = await device.gatt.connect();
-        const service = await server.getPrimaryService(SERVICE_UUID);
-        const characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+// Dicionário: chave em PT sem acento → [PT, ES, IT, DE, EN]
+const DICT = {
+OI:['Oi','Hola','Ciao','Hallo','Hi'], OLA:['Olá','Hola','Ciao','Hallo','Hello'],
+BOM:['Bom','Bueno','Buono','Gut','Good'], BOA:['Boa','Buena','Buona','Gut','Good'],
+DIA:['Dia','Día','Giorno','Tag','Day'], TARDE:['Tarde','Tarde','Pomeriggio','Nachmittag','Afternoon'],
+NOITE:['Noite','Noche','Notte','Nacht','Night'], SIM:['Sim','Sí','Sì','Ja','Yes'],
+NAO:['Não','No','No','Nein','No'], OBRIGADO:['Obrigado','Gracias','Grazie','Danke','Thank you'],
+OBRIGADA:['Obrigada','Gracias','Grazie','Danke','Thank you'], TCHAU:['Tchau','Adiós','Ciao','Tschüss','Bye'],
+AGUA:['Água','Agua','Acqua','Wasser','Water'], AMOR:['Amor','Amor','Amore','Liebe','Love'],
+AMIGO:['Amigo','Amigo','Amico','Freund','Friend'], FAMILIA:['Família','Familia','Famiglia','Familie','Family'],
+CASA:['Casa','Casa','Casa','Haus','House'], COMER:['Comer','Comer','Mangiare','Essen','Eat'],
+AJUDA:['Ajuda','Ayuda','Aiuto','Hilfe','Help'], DESCULPA:['Desculpa','Perdón','Scusa','Entschuldigung','Sorry'],
+PAZ:['Paz','Paz','Pace','Frieden','Peace'], EU:['Eu','Yo','Io','Ich','I'],
+VOCE:['Você','Tú','Tu','Du','You'], TE:['Te','Te','Ti','Dich','You'],
+AMO:['Amo','Amo','Amo','Liebe','Love'], LIBRAS:['Libras','Libras','Libras','Libras','Libras'],
+PORFAVOR:['Por favor','Por favor','Per favore','Bitte','Please'], BEM:['Bem','Bien','Bene','Gut','Well']
+};
+const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
 
-        await characteristic.startNotifications();
-        characteristic.addEventListener('characteristicvaluechanged', tratarDados);
+// ---- Elementos ----
+const $ = id => document.getElementById(id);
+const textEl = $('text'), letterEl = $('letter'), statusEl = $('status');
+let voiceOn = true, device = null, char = null;
 
-        document.getElementById('status').innerText = "Status: 🟢 Conectado ao LinkGlove";
-      } catch (error) {
-        console.error(error);
-        document.getElementById('status').innerText = "Status: ❌ Falha na conexão";
-      }
-    }
+// ---- Cartões e alfabeto ----
+$('tr').innerHTML = LANGS.map((l,i)=>`<div class="card"><h3>${l[0]} ${l[1]}</h3><p id="t${i}">–</p><small id="n${i}"></small></div>`).join('');
+$('alpha').innerHTML = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map(c=>`<div id="a${c}">${c}</div>`).join('');
 
-    function tratarDados(event) {
-      const decoder = new TextDecoder('utf-8');
-      const letra = decoder.decode(event.target.value).trim();
+function translate(){
+  const raw = textEl.value.trim();
+  const toks = raw ? raw.split(/\s+/) : [];
+  const last = letterEl.textContent;
+  LANGS.forEach((_,i)=>{
+    const out = toks.map(t=>{
+      const k = norm(t);
+      if (DICT[k]) return DICT[k][i];
+      if (k.length===1 && LN[k.charCodeAt(0)-65]) return LN[k.charCodeAt(0)-65][i];
+      return t;
+    }).join(' ');
+    $('t'+i).textContent = out || '–';
+    const k = norm(last);
+    $('n'+i).textContent = (k.length===1 && LN[k.charCodeAt(0)-65]) ? `Letra ${k}: ${LN[k.charCodeAt(0)-65][i]}` : '';
+  });
+}
 
-      document.getElementById('letraAtual').innerText = letra;
-      textoAcumulado += letra;
-      document.getElementById('palavraFormada').innerText = textoAcumulado;
+function speak(msg){
+  if (!voiceOn || !('speechSynthesis' in window) || !msg) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(msg);
+  u.lang = 'pt-BR';
+  speechSynthesis.speak(u);
+}
 
-      atualizarTraducoes(textoAcumulado, letra);
+function highlight(c){
+  document.querySelectorAll('.alpha .hit').forEach(e=>e.classList.remove('hit'));
+  const el = $('a'+norm(c)); if (el) el.classList.add('hit');
+}
 
-      // Reproduz o áudio com a pronúncia do caractere/palavra
-      if (audioAtivo) {
-        falarTexto(letra);
-      }
-    }
+// Recebe o que a luva envia: letra, palavra ou comando (_ / ESPACO = espaço, DEL = apagar)
+function onData(msg){
+  msg = msg.trim(); if (!msg) return;
+  const k = norm(msg);
+  if (k==='_' || k==='ESPACO'){ textEl.value += ' '; speak('espaço'); translate(); return; }
+  if (k==='DEL' || k==='APAGAR'){ textEl.value = textEl.value.slice(0,-1); translate(); return; }
+  letterEl.textContent = msg.toUpperCase();
+  highlight(msg);
+  textEl.value += msg.length>1 ? (textEl.value && !/\s$/.test(textEl.value) ? ' ' : '') + msg + ' ' : msg;
+  speak(msg);
+  translate();
+}
 
-    function atualizarTraducoes(palavra, ultimaLetra) {
-      if (dicionario[palavra]) {
-        document.getElementById('tradPT').innerText = dicionario[palavra].pt;
-        document.getElementById('tradES').innerText = dicionario[palavra].es;
-        document.getElementById('tradIT').innerText = dicionario[palavra].it;
-        document.getElementById('tradDE').innerText = dicionario[palavra].de;
-      } else if (dicionario[ultimaLetra]) {
-        document.getElementById('tradPT').innerText = dicionario[ultimaLetra].pt;
-        document.getElementById('tradES').innerText = dicionario[ultimaLetra].es;
-        document.getElementById('tradIT').innerText = dicionario[ultimaLetra].it;
-        document.getElementById('tradDE').innerText = dicionario[ultimaLetra].de;
-      } else {
-        document.getElementById('tradPT').innerText = palavra;
-        document.getElementById('tradES').innerText = palavra;
-        document.getElementById('tradIT').innerText = palavra;
-        document.getElementById('tradDE').innerText = palavra;
-      }
-    }
+// ---- Bluetooth ----
+function setStatus(on){
+  statusEl.textContent = on ? '🟢 Conectado' : '❌ Desconectado';
+  statusEl.className = on ? 'on' : 'off';
+  $('btnConn').textContent = on ? 'Desconectar' : 'Conectar via Bluetooth';
+}
+function warn(m){ const w=$('warn'); w.textContent=m; w.style.display=m?'block':'none'; }
 
-    // Função de Síntese de Voz (Text-to-Speech)
-    function falarTexto(texto) {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel(); // Cancela áudio anterior para não encavalar
-        const utterance = new SpeechSynthesisUtterance(texto);
-        utterance.lang = 'pt-BR';
-        utterance.rate = 1.1; // Velocidade da fala
-        window.speechSynthesis.speak(utterance);
-      }
-    }
+async function connect(){
+  if (!navigator.bluetooth){ warn('Este navegador não suporta Web Bluetooth. Use Chrome ou Edge no Android ou computador (no iPhone não funciona).'); return; }
+  warn('');
+  try{
+    device = await navigator.bluetooth.requestDevice({filters:[{name:DEVICE_NAME}], optionalServices:[SERVICE_UUID]});
+    device.addEventListener('gattserverdisconnected', ()=>setStatus(false));
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+    char = await service.getCharacteristic(CHAR_UUID);
+    await char.startNotifications();
+    char.addEventListener('characteristicvaluechanged', e=>onData(new TextDecoder().decode(e.target.value)));
+    setStatus(true);
+  }catch(err){
+    setStatus(false);
+    if (err.name!=='NotFoundError') warn('Não foi possível conectar: '+err.message);
+  }
+}
+$('btnConn').onclick = ()=>{ if (device && device.gatt.connected) device.gatt.disconnect(); else connect(); };
 
-    function alternarAudio() {
-      audioAtivo = !audioAtivo;
-      const btn = document.getElementById('btnVoz');
-      if (audioAtivo) {
-        btn.innerText = "🔊 Voz: Ativada";
-        btn.classList.remove('muted');
-      } else {
-        btn.innerText = "🔇 Voz: Desativada";
-        btn.classList.add('muted');
-      }
-    }
+// ---- Botões ----
+$('btnClear').onclick = ()=>{ textEl.value=''; letterEl.textContent='–'; highlight('#'); if ('speechSynthesis' in window) speechSynthesis.cancel(); translate(); };
+$('btnVoice').onclick = ()=>{
+  voiceOn = !voiceOn;
+  $('btnVoice').textContent = voiceOn ? '🔊 Voz: Ativada' : '🔇 Voz: Desativada';
+  if (!voiceOn && 'speechSynthesis' in window) speechSynthesis.cancel();
+};
+$('btnSpeakAll').onclick = ()=>speak(textEl.value);
+textEl.addEventListener('input', translate);
 
-    function limparTexto() {
-      textoAcumulado = "";
-      document.getElementById('palavraFormada').innerText = "...";
-      document.getElementById('letraAtual').innerText = "-";
-      document.getElementById('tradPT').innerText = "-";
-      document.getElementById('tradES').innerText = "-";
-      document.getElementById('tradIT').innerText = "-";
-      document.getElementById('tradDE').innerText = "-";
-    }
-  </script>
+// ---- Vídeo ----
+function loadPlaylist(id){
+  const box = $('video');
+  if (!id){
+    box.innerHTML = '<div class="empty"><p>Cole acima o link de uma playlist de LIBRAS (por exemplo, da TV INES) para assistir aqui.</p><a target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=TV+INES+aulas+de+Libras+playlist">Procurar videoaulas no YouTube</a></div>';
+    return;
+  }
+  box.innerHTML = `<iframe src="https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(id)}" title="Videoaulas de LIBRAS" allow="accelerometer; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
+}
+$('btnPl').onclick = ()=>{
+  const v = $('plUrl').value.trim();
+  const m = v.match(/[?&]list=([\w-]+)/);
+  loadPlaylist(m ? m[1] : (/^[\w-]{10,}$/.test(v) ? v : ''));
+};
+
+loadPlaylist(PLAYLIST_ID);
+translate();
+</script>
 </body>
 </html>
