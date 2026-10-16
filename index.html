@@ -113,7 +113,7 @@ a{color:var(--acc)}
       </div>
       <button id="btnCam" class="primary">Ligar câmera</button>
       <div id="camMsg" role="status"></div>
-      <small style="color:var(--mut)">Mantenha a mesma letra por 1 segundo para enviá-la ao texto. Para repetir a mesma letra, tire a mão da imagem um instante. Reconhece a forma e a direção da mão: A, B, C, D, G, I, L, O, R, U, V, W e Y (dedos para cima) e M, N e Q (dedos para baixo).</small>
+      <small style="color:var(--mut)">Mantenha a mesma letra por 1 segundo para enviá-la ao texto. Para repetir a mesma letra, tire a mão da imagem um instante. Letras: A, B, C, D, F, G, I, L, O, R, U, V, W, Y (dedos para cima) e M, N, Q (dedos para baixo). Sinais: EU (apontar o indicador para si), FAMÍLIA (duas mãos em F que se afastam e se juntam) e 6-7 (as duas mãos sobem e descem alternadas).</small>
       <div id="camDbg"></div>
     </div>
   </div>
@@ -248,7 +248,8 @@ com|con|con|mit|with
 para|para|per|für|for
 de|de|di|von|of
 um|un|un|ein|a
-uma|una|una|eine|a`.split('\n').map(l=>{const t=l.split('|');return{k:norm(t[0]).replace(/[^A-Z]/g,''),t}});
+uma|una|una|eine|a
+seis sete|seis siete|sei sette|sechs sieben|six seven`.split('\n').map(l=>{const t=l.split('|');return{k:norm(t[0]).replace(/[^A-Z]/g,''),t}});
 
 function norm(s){return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase()}
 
@@ -393,7 +394,9 @@ const HOLD_MS = 1000;                     // tempo mantendo a letra para enviar
 const EXT = [1.6,1.65,1.6,1.45];          // razão punta/pulso ÷ base/pulso: acima = dedo esticado (indicador, médio, anelar, mínimo)
 const CURL = [1.25,1.25,1.25,1.2];        // abaixo = dedo dobrado
 const THUMB_OUT = 1.3;                    // distância polegar–base do mínimo ÷ tamanho da mão: acima = polegar aberto
-const V_GAP = 1.6;                        // abertura entre indicador e médio: acima = V, abaixo = U
+const V_GAP = 1.6;
+const EU_Z = -0.1;                        // ponta do indicador bem mais perto da câmera que a base = apontando para si
+const GEST_WIN = 1800;                    // janela (ms) para gestos com movimento                        // abertura entre indicador e médio: acima = V, abaixo = U
 const CONN = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
 const cv = $('camVideo'), cc = $('camCanvas'), cx = cc.getContext('2d');
 let hands = null, cam = null, camOn = false, buf = [], held = null, heldSince = 0, sentLetter = false;
@@ -412,18 +415,22 @@ function classify(lm, w, h){
   const ux=(lm[9].x-lm[5].x)*w, uy=(lm[9].y-lm[5].y)*h;
   const cr = (((lm[8].x-lm[12].x)*w)*ux + ((lm[8].y-lm[12].y)*h)*uy) / Math.hypot(ux,uy) / size;
   const crossed = cr > 0.05;
+  const dz = lm[8].z - lm[5].z;
+  const tx = lm[8].x - lm[0].x, toward = (0.5-lm[0].x)*tx>0 && Math.abs(tx)>0.08;   // aponta para o centro do corpo
   const [i,m,a,p] = st, E = x=>x==='E', C = x=>x==='C';
   const nH = st.filter(x=>x==='H').length;
   let L = null;
   if (E(i)&&E(m)&&E(a)&&E(p)&&!tOut&&!down) L='B';
   else if (E(i)&&E(m)&&E(a)&&C(p)) L = down ? 'M' : 'W';
+  else if (E(i)&&E(m)&&C(a)&&C(p)&&tOut&&gap<=V_GAP&&!down) L='F';
   else if (E(i)&&E(m)&&C(a)&&C(p)&&!tOut) L = down ? 'N' : crossed ? 'R' : gap>V_GAP ? 'V' : 'U';
-  else if (E(i)&&!E(m)&&!E(a)&&!E(p)) L = tOut ? (down?null:'L') : down ? 'Q' : cm<0.4 ? 'D' : 'G';
+  else if (E(i)&&!E(m)&&!E(a)&&!E(p)) L = tOut ? (down?null:'L') : (dir==='lado'&&toward) ? 'EU' : down ? 'Q' : cm<0.4 ? 'D' : 'G';
   else if (E(p)&&C(i)&&C(m)&&C(a)) L = tOut ? 'Y' : 'I';
+  else if (!tOut && dz<EU_Z && !C(i) && !E(m)&&!E(a)&&!E(p)) L='EU';
   else if (cg<0.3 && nH>=2 && !st.some(E)) L='O';
   else if (st.every(C)) L='A';
   else if (nH>=3 && !st.some(E) && cg>0.35 && cg<1.2) L='C';
-  return {L, st, r, thumb, gap, dir, cr};
+  return {L, st, r, thumb, gap, dir, cr, dz};
 }
 
 function camSend(L){
@@ -436,20 +443,49 @@ function camSend(L){
   if (p>=1){ sentLetter=true; $('camBig').classList.add('sent'); onData(L); }   // mesma função da luva Bluetooth
 }
 
+let hist = [], gestLock = 0;
+function detectGesture(){
+  const fr = hist.filter(f=>f.h.length===2);
+  if (fr.length<20 || fr[fr.length-1].t-fr[0].t<1000) return null;
+  const A=fr.map(f=>f.h[0].y), B=fr.map(f=>f.h[1].y), D=fr.map(f=>Math.abs(f.h[1].x-f.h[0].x));
+  const rng=a=>Math.max(...a)-Math.min(...a);
+  const flips=a=>{let n=0,last=0,ref=a[0];for(const v of a){const d=v-ref;if(Math.abs(d)>0.025){const sg=Math.sign(d);if(last&&sg!==last)n++;last=sg;ref=v}}return n};
+  const corr=(a,b)=>{const n=a.length,ma=a.reduce((x,y)=>x+y)/n,mb=b.reduce((x,y)=>x+y)/n;let sab=0,saa=0,sbb=0;for(let i=0;i<n;i++){sab+=(a[i]-ma)*(b[i]-mb);saa+=(a[i]-ma)**2;sbb+=(b[i]-mb)**2}return sab/Math.sqrt(saa*sbb||1)};
+  // FAMÍLIA: duas mãos em F, afastam e voltam a se juntar
+  const fF = fr.filter(f=>f.h[0].F&&f.h[1].F).length/fr.length, mx=Math.max(...D);
+  if (fF>=0.6 && rng(D)>=0.12 && D[0]<mx-0.06 && D[D.length-1]<mx-0.06) return 'FAMILIA';
+  // 6-7: as duas mãos sobem e descem alternadas
+  if (rng(A)>=0.06 && rng(B)>=0.06 && flips(A)>=2 && flips(B)>=2 && corr(A,B)<-0.3 && rng(D)<0.25) return 'SEIS SETE';
+  return null;
+}
+
 function onHandResults(res){
-  const w = cv.videoWidth, h = cv.videoHeight;
+  const w = cv.videoWidth, h = cv.videoHeight, now = performance.now();
   if (cc.width!==w || cc.height!==h){ cc.width=w; cc.height=h; }
   cx.clearRect(0,0,w,h);
-  const lm = res.multiHandLandmarks && res.multiHandLandmarks[0];
-  let L = null;
-  if (lm){
+  const all = (res.multiHandLandmarks||[]).slice(0,2).sort((p,q)=>p[0].x-q[0].x);
+  all.forEach(lm=>{
     cx.lineWidth=3; cx.strokeStyle='#ffb454';
     CONN.forEach(([a,b])=>{cx.beginPath();cx.moveTo(lm[a].x*w,lm[a].y*h);cx.lineTo(lm[b].x*w,lm[b].y*h);cx.stroke()});
     cx.fillStyle='#5eead4';
     lm.forEach(q=>{cx.beginPath();cx.arc(q.x*w,q.y*h,4,0,6.283);cx.fill()});
-    const c = classify(lm,w,h); L = c.L;
-    $('camDbg').textContent = `dedos I/M/A/P: ${c.st.join('')} (${c.r.map(v=>v.toFixed(2)).join(' ')}) · polegar ${c.thumb.toFixed(2)} · abertura ${c.gap.toFixed(2)} · dedos para ${c.dir} · cruzado ${c.cr.toFixed(2)}`;
-  } else $('camDbg').textContent = 'Nenhuma mão detectada';
+  });
+  const cl = all.map(lm=>classify(lm,w,h));
+  hist.push({t:now, h:all.map((lm,i)=>({x:lm[0].x, y:lm[9].y, F:cl[i].L==='F'}))});
+  while (hist.length && now-hist[0].t>GEST_WIN) hist.shift();
+  let L = null;
+  if (all.length===1){
+    const c = cl[0]; L = c.L;
+    $('camDbg').textContent = `dedos I/M/A/P: ${c.st.join('')} (${c.r.map(v=>v.toFixed(2)).join(' ')}) · polegar ${c.thumb.toFixed(2)} · abertura ${c.gap.toFixed(2)} · dedos para ${c.dir} · cruzado ${c.cr.toFixed(2)} · z ${c.dz.toFixed(2)}`;
+  } else $('camDbg').textContent = all.length ? `Duas mãos: ${cl.map(c=>c.L||'?').join(' + ')} (só gestos; letras usam uma mão)` : 'Nenhuma mão detectada';
+  if (now<gestLock) return;                         // pausa depois de um gesto
+  const g = detectGesture();
+  if (g){
+    gestLock = now+3000; hist = []; buf = []; held = null; sentLetter = true;
+    $('camLetter').textContent = g==='FAMILIA' ? 'FAMÍLIA' : g;
+    $('camBar').style.width='100%'; $('camBig').classList.add('sent');
+    onData(g); return;
+  }
   // suavização: a letra só vale se aparecer em 5 dos últimos 7 quadros
   buf.push(L); if (buf.length>7) buf.shift();
   const cnt = {}; buf.forEach(x=>{ if(x) cnt[x]=(cnt[x]||0)+1 });
@@ -467,7 +503,7 @@ async function camStart(){
   try{
     if (!hands){
       hands = new Hands({locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${f}`});
-      hands.setOptions({maxNumHands:1, modelComplexity:1, minDetectionConfidence:0.6, minTrackingConfidence:0.6});
+      hands.setOptions({maxNumHands:2, modelComplexity:1, minDetectionConfidence:0.6, minTrackingConfidence:0.6});
       hands.onResults(onHandResults);
     }
     cam = new Camera(cv, {onFrame: async()=>{ await hands.send({image:cv}) }, width:640, height:480, facingMode:'user'});
