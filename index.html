@@ -113,7 +113,7 @@ a{color:var(--acc)}
       </div>
       <button id="btnCam" class="primary">Ligar câmera</button>
       <div id="camMsg" role="status"></div>
-      <small style="color:var(--mut)">Mantenha a mesma letra por 1 segundo para enviá-la ao texto. Para repetir a mesma letra, tire a mão da imagem um instante. Reconhece só a forma da mão: A, B, C, I, L, U, V, W e Y.</small>
+      <small style="color:var(--mut)">Mantenha a mesma letra por 1 segundo para enviá-la ao texto. Para repetir a mesma letra, tire a mão da imagem um instante. Reconhece a forma e a direção da mão: A, B, C, D, G, I, L, O, R, U, V, W e Y (dedos para cima) e M, N e Q (dedos para baixo).</small>
       <div id="camDbg"></div>
     </div>
   </div>
@@ -404,17 +404,26 @@ function classify(lm, w, h){
   const r = [8,12,16,20].map((t,i) => d(t,0) / d([5,9,13,17][i],0));
   const st = r.map((v,i) => v>=EXT[i] ? 'E' : v<=CURL[i] ? 'C' : 'H');
   const thumb = d(4,17)/size, tOut = thumb > THUMB_OUT;
-  const gap = d(8,12)/d(5,9), cg = d(4,8)/size;
+  const gap = d(8,12)/d(5,9), cg = d(4,8)/size, cm = d(4,12)/size;
+  // direção dos dedos: pulso -> base do dedo médio (cima / baixo / lado)
+  const vx=(lm[9].x-lm[0].x)*w, vy=(lm[9].y-lm[0].y)*h, k=vy/Math.hypot(vx,vy);
+  const dir = k<-0.5 ? 'cima' : k>0.5 ? 'baixo' : 'lado', down = dir==='baixo';
+  // indicador e médio cruzados (R): a ponta do indicador passa da ponta do médio
+  const ux=(lm[9].x-lm[5].x)*w, uy=(lm[9].y-lm[5].y)*h;
+  const cr = (((lm[8].x-lm[12].x)*w)*ux + ((lm[8].y-lm[12].y)*h)*uy) / Math.hypot(ux,uy) / size;
+  const crossed = cr > 0.05;
   const [i,m,a,p] = st, E = x=>x==='E', C = x=>x==='C';
+  const nH = st.filter(x=>x==='H').length;
   let L = null;
-  if (E(i)&&E(m)&&E(a)&&E(p)&&!tOut) L='B';
-  else if (E(i)&&E(m)&&E(a)&&C(p)) L='W';
-  else if (E(i)&&E(m)&&C(a)&&C(p)&&!tOut) L = gap>V_GAP ? 'V' : 'U';
-  else if (E(i)&&C(m)&&C(a)&&C(p)&&tOut) L='L';
+  if (E(i)&&E(m)&&E(a)&&E(p)&&!tOut&&!down) L='B';
+  else if (E(i)&&E(m)&&E(a)&&C(p)) L = down ? 'M' : 'W';
+  else if (E(i)&&E(m)&&C(a)&&C(p)&&!tOut) L = down ? 'N' : crossed ? 'R' : gap>V_GAP ? 'V' : 'U';
+  else if (E(i)&&!E(m)&&!E(a)&&!E(p)) L = tOut ? (down?null:'L') : down ? 'Q' : cm<0.4 ? 'D' : 'G';
   else if (E(p)&&C(i)&&C(m)&&C(a)) L = tOut ? 'Y' : 'I';
-  else if (C(i)&&C(m)&&C(a)&&C(p)) L='A';
-  else if (st.filter(x=>x==='H').length>=3 && !st.some(E) && cg>0.35 && cg<1.2) L='C';
-  return {L, st, r, thumb, gap};
+  else if (cg<0.3 && nH>=2 && !st.some(E)) L='O';
+  else if (st.every(C)) L='A';
+  else if (nH>=3 && !st.some(E) && cg>0.35 && cg<1.2) L='C';
+  return {L, st, r, thumb, gap, dir, cr};
 }
 
 function camSend(L){
@@ -439,7 +448,7 @@ function onHandResults(res){
     cx.fillStyle='#5eead4';
     lm.forEach(q=>{cx.beginPath();cx.arc(q.x*w,q.y*h,4,0,6.283);cx.fill()});
     const c = classify(lm,w,h); L = c.L;
-    $('camDbg').textContent = `dedos I/M/A/P: ${c.st.join('')} (${c.r.map(v=>v.toFixed(2)).join(' ')}) · polegar ${c.thumb.toFixed(2)} · abertura ${c.gap.toFixed(2)}`;
+    $('camDbg').textContent = `dedos I/M/A/P: ${c.st.join('')} (${c.r.map(v=>v.toFixed(2)).join(' ')}) · polegar ${c.thumb.toFixed(2)} · abertura ${c.gap.toFixed(2)} · dedos para ${c.dir} · cruzado ${c.cr.toFixed(2)}`;
   } else $('camDbg').textContent = 'Nenhuma mão detectada';
   // suavização: a letra só vale se aparecer em 5 dos últimos 7 quadros
   buf.push(L); if (buf.length>7) buf.shift();
