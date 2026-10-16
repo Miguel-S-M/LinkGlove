@@ -63,6 +63,8 @@ a{color:var(--acc)}
 .camside .big.sent span{color:var(--ok)}
 .bar{height:10px;width:100%;background:var(--surf);border-radius:6px;overflow:hidden;border:1px solid var(--line);margin-top:12px}
 .bar i{display:block;height:100%;width:0;background:var(--acc)}
+details{color:var(--mut);font-size:.9rem}
+summary{cursor:pointer;color:var(--acc)}
 #camMsg{color:var(--bad);font-size:.9rem;min-height:1.3em}
 #camDbg{color:var(--mut);font-size:.78rem;font-family:ui-monospace,Consolas,monospace;overflow-wrap:anywhere}
 @media(max-width:720px){.main,.camgrid{grid-template-columns:1fr}}
@@ -116,7 +118,11 @@ a{color:var(--acc)}
       </div>
       <button id="btnCam" class="primary">Ligar câmera</button>
       <div id="camMsg" role="status"></div>
-      <small style="color:var(--mut)">Mantenha a mesma letra por 1 segundo para enviá-la ao texto. Para repetir a mesma letra, tire a mão da imagem um instante. Letras: A, B, C, D, F, G, I, L, O, R, U, V, W, Y (dedos para cima) e M, N, Q (dedos para baixo). Sinais: EU (apontar o indicador para si), FAMÍLIA (duas mãos em F que se afastam e se juntam) e 6-7 (as duas mãos sobem e descem alternadas).</small>
+      <small style="color:var(--mut)">Mantenha a mesma letra por 1 segundo para enviá-la ao texto. Para repetir a mesma letra, tire a mão da imagem um instante. Letras: A, B, C, D, E, F, G, I, L, O, R, U, V, W, Y (dedos para cima) e M, N, Q (dedos para baixo). Sinais: EU (apontar o indicador para si), FAMÍLIA (duas mãos em F que se afastam e se juntam) e 6-7 (as duas mãos sobem e descem alternadas).</small>
+      <details id="train"><summary>Ensinar letras à câmera (treino com a sua mão)</summary>
+        <div class="row" style="margin:8px 0"><select id="trL" aria-label="Letra a ensinar"></select><button id="btnRec">Gravar 1,5 s</button><button id="btnTrClear">Apagar treino</button></div>
+        <small id="trInfo">Ligue a câmera, faça a letra, escolha-a aqui e grave. Grave também as letras parecidas (ex.: C e E), em poses um pouco diferentes. As suas gravações passam a valer mais que as regras.</small>
+      </details>
       <div id="camDbg"></div>
     </div>
   </div>
@@ -420,6 +426,15 @@ const EXT = [1.6,1.65,1.6,1.45];          // razão punta/pulso ÷ base/pulso: a
 const CURL = [1.25,1.25,1.25,1.2];        // abaixo = dedo dobrado
 const THUMB_OUT = 1.3;                    // distância polegar–base do mínimo ÷ tamanho da mão: acima = polegar aberto
 const V_GAP = 1.6;
+const KNN_MAX = 0.8;                      // distância máxima para uma gravação sua valer
+let SAMPLES = []; try{ SAMPLES = JSON.parse(localStorage.getItem('linkglove_amostras')||'[]') }catch(e){}
+function knn(f){
+  if (!SAMPLES.length) return null;
+  const ds = SAMPLES.map(x=>({L:x.L, d:Math.hypot(...x.f.map((v,i)=>v-f[i]))})).sort((a,b)=>a.d-b.d).slice(0,5).filter(x=>x.d<=KNN_MAX);
+  if (!ds.length) return null;
+  const c = {}; ds.forEach(x=>c[x.L]=(c[x.L]||0)+1/(x.d+0.05));
+  return Object.keys(c).sort((a,b)=>c[b]-c[a])[0];
+}
 const EU_Z = 0.06;                        // ponta do indicador MAIS LONGE da câmera que a base = apontando para o corpo
 const GEST_WIN = 2500;                    // janela (ms) para gestos com movimento                        // abertura entre indicador e médio: acima = V, abaixo = U
 const CONN = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
@@ -444,19 +459,23 @@ function classify(lm, w, h){
   const tx = (lm[8].x-lm[0].x)*w, ty = (lm[8].y-lm[0].y)*h;
   const toward = (0.5-lm[0].x)*tx>0 && Math.abs(tx)>0.7*size && Math.abs(ty)<1.5*Math.abs(tx);   // indicador aponta para o centro do corpo (até ~55° da horizontal)
   const [i,m,a,p] = st, E = x=>x==='E', C = x=>x==='C';
-  const nH = st.filter(x=>x==='H').length;
+  const nH = st.filter(x=>x==='H').length, ravg = (r[0]+r[1]+r[2]+r[3])/4;
   let L = null;
-  if (E(i)&&E(m)&&E(a)&&E(p)&&!tOut&&!down) L='B';
-  else if (E(i)&&E(m)&&E(a)&&C(p)) L = down ? 'M' : 'W';
+  if (down && E(i)&&E(m)&&!E(p)) L = a==='C' ? 'N' : 'M';           // dedos para baixo: anelar esticado/meio = M, dobrado = N
+  else if (E(i)&&E(m)&&E(a)&&E(p)&&!tOut&&!down) L='B';
+  else if (E(i)&&E(m)&&E(a)&&C(p)) L = 'W';
   else if (E(i)&&E(m)&&C(a)&&C(p)&&tOut&&gap<=V_GAP&&!down) L='F';
-  else if (E(i)&&E(m)&&C(a)&&C(p)&&!tOut) L = down ? 'N' : crossed ? 'R' : gap>V_GAP ? 'V' : 'U';
+  else if (E(i)&&E(m)&&C(a)&&C(p)&&!tOut) L = crossed ? 'R' : gap>V_GAP ? 'V' : 'U';
   else if (E(i)&&!E(m)&&!E(a)&&!E(p)) L = tOut ? (down?null:'L') : toward ? 'EU' : down ? 'Q' : dir!=='cima' ? null : cm<0.4 ? 'D' : 'G';
   else if (E(p)&&C(i)&&C(m)&&C(a)) L = tOut ? 'Y' : 'I';
   else if (!tOut && dz>EU_Z && !C(i) && !E(m)&&!E(a)&&!E(p)) L='EU';
   else if (cg<0.3 && nH>=2 && !st.some(E)) L='O';
   else if (st.every(C)) L='A';
-  else if (nH>=3 && !st.some(E) && cg>0.35 && cg<1.2) L='C';
-  return {L, st, r, thumb, gap, dir, cr, dz};
+  else if (!tOut && !st.some(E) && nH>=1 && ravg<=1.4 && cg<=0.55) L='E';   // dedos dobrados, polegar por baixo, perto das pontas
+  else if (nH>=3 && !st.some(E) && cg>0.55 && cg<1.4) L='C';
+  const f = [r[0],r[1],r[2],r[3],thumb,gap,cg,cm,k*1.5,cr*3];
+  const rule = L; const kn = knn(f); if (kn) L = kn;
+  return {L, rule, st, r, thumb, gap, dir, cr, dz, cg, f};
 }
 
 function camSend(L){
@@ -469,7 +488,7 @@ function camSend(L){
   if (p>=1){ sentLetter=true; $('camBig').classList.add('sent'); onData(L); }   // mesma função da luva Bluetooth
 }
 
-let hist = [], gestLock = 0, gdbg = '';
+let hist = [], gestLock = 0, gdbg = '', rec = null;
 function detectGesture(){
   const fr = hist.filter(f=>f.h.length===2);
   if (fr.length<10 || fr[fr.length-1].t-fr[0].t<900) return null;
@@ -498,13 +517,17 @@ function onHandResults(res){
     lm.forEach(q=>{cx.beginPath();cx.arc(q.x*w,q.y*h,4,0,6.283);cx.fill()});
   });
   const cl = all.map(lm=>classify(lm,w,h));
+  if (rec && now<rec.until && all.length===1){
+    SAMPLES.push({L:rec.L, f:cl[0].f});
+    const mine = SAMPLES.filter(x=>x.L===rec.L); if (mine.length>60) SAMPLES.splice(SAMPLES.indexOf(mine[0]),1);
+  }
   hist.push({t:now, h:all.map((lm,i)=>({x:lm[0].x, y:lm[9].y, F:cl[i].L==='F'}))});
   while (hist.length && now-hist[0].t>GEST_WIN) hist.shift();
   const g = now<gestLock ? null : detectGesture();
   let L = null;
   if (all.length===1){
     const c = cl[0]; L = c.L;
-    $('camDbg').textContent = `dedos I/M/A/P: ${c.st.join('')} (${c.r.map(v=>v.toFixed(2)).join(' ')}) · polegar ${c.thumb.toFixed(2)} · abertura ${c.gap.toFixed(2)} · dedos para ${c.dir} · cruzado ${c.cr.toFixed(2)} · z ${c.dz.toFixed(2)} · lendo: ${c.L||'?'}`;
+    $('camDbg').textContent = `dedos I/M/A/P: ${c.st.join('')} (${c.r.map(v=>v.toFixed(2)).join(' ')}) · polegar ${c.thumb.toFixed(2)} · abertura ${c.gap.toFixed(2)} · dedos para ${c.dir} · cruzado ${c.cr.toFixed(2)} · z ${c.dz.toFixed(2)} · cg ${c.cg.toFixed(2)} · lendo: ${c.L||'?'}${c.rule&&c.rule!==c.L?' (regra: '+c.rule+')':''}`;
   } else $('camDbg').textContent = all.length ? `Duas mãos: ${cl.map(c=>c.L||'?').join(' + ')} (só gestos) · ${gdbg}` : 'Nenhuma mão detectada';
   if (now<gestLock) return;                         // pausa depois de um gesto
   if (g){
@@ -554,6 +577,21 @@ async function camStop(){
   $('btnCam').textContent='Ligar câmera';
 }
 $('btnCam').onclick = () => camOn ? camStop() : camStart();
+$('trL').innerHTML = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ','EU'].map(x=>`<option>${x}</option>`).join('');
+function trInfo(){
+  const c={}; SAMPLES.forEach(x=>c[x.L]=(c[x.L]||0)+1);
+  const t=Object.keys(c).sort().map(k=>k+':'+c[k]).join('  ');
+  $('trInfo').textContent = t ? 'Gravações: '+t : 'Nenhuma gravação ainda.';
+}
+function trSave(){ try{ localStorage.setItem('linkglove_amostras', JSON.stringify(SAMPLES)) }catch(e){} }
+$('btnRec').onclick = () => {
+  if (!camOn){ camMsg('Ligue a câmera antes de gravar.'); return; }
+  rec = {L:$('trL').value, until:performance.now()+1500};
+  $('btnRec').disabled = true; $('btnRec').textContent = 'Gravando '+rec.L+'...';
+  setTimeout(()=>{ rec=null; $('btnRec').disabled=false; $('btnRec').textContent='Gravar 1,5 s'; trSave(); trInfo(); }, 1600);
+};
+$('btnTrClear').onclick = () => { SAMPLES.length=0; trSave(); trInfo(); };
+trInfo();
 
 loadPlaylist(PLAYLIST_ID);
 translate();
