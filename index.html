@@ -19,6 +19,8 @@ button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(-
 button:hover{border-color:var(--acc)}
 button:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .primary{background:var(--acc);color:#241600;border-color:var(--acc);font-weight:700}
+.pill{padding:6px 12px;border-radius:999px}
+.pill.sel{background:var(--acc);color:#241600;border-color:var(--acc)}
 #status{padding:8px 14px;border-radius:999px;background:var(--surf);border:1px solid var(--line);font-weight:600}
 #status.on{color:var(--ok);border-color:var(--ok)}
 #status.off{color:var(--bad)}
@@ -27,15 +29,21 @@ section{background:var(--surf);border:1px solid var(--line);border-radius:16px;p
 .big{background:var(--bg);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;min-height:220px;text-align:center}
 .big span{font-size:clamp(4rem,18vw,8rem);font-weight:800;line-height:1;color:var(--acc);word-break:break-all}
 .big small{color:var(--mut);margin-top:8px}
-textarea{width:100%;min-height:150px;resize:vertical;background:var(--bg);color:var(--tx);border:1px solid var(--line);border-radius:12px;padding:12px;font:inherit;font-size:1.3rem}
+textarea{width:100%;min-height:130px;resize:vertical;background:var(--bg);color:var(--tx);border:1px solid var(--line);border-radius:12px;padding:12px;font:inherit;font-size:1.3rem}
+#heard{margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--bg);border:1px dashed var(--acc);font-size:1.15rem;min-height:2.6em}
+#heard small{display:block;color:var(--mut);font-size:.8rem}
 .tr{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
 .card{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:14px}
-.card h3{font-size:.95rem;margin-bottom:6px}
+.card.sel{border-color:var(--acc)}
+.card h3{font-size:.95rem;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.card h3 button{padding:4px 10px}
 .card p{font-size:1.2rem;min-height:2.4em;overflow-wrap:anywhere}
 .card small{color:var(--mut)}
-.alpha{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:8px}
-.alpha div{background:var(--bg);border:1px solid var(--line);border-radius:10px;text-align:center;padding:12px 0;font-size:1.5rem;font-weight:700}
-.alpha div.hit{background:var(--acc);color:#241600;border-color:var(--acc)}
+.alpha{display:grid;grid-template-columns:repeat(auto-fill,minmax(125px,1fr));gap:10px}
+.alpha div{border-radius:12px;border:3px solid transparent;line-height:0}
+.alpha img{width:100%;display:block;border-radius:10px}
+.alpha div.hit{border-color:var(--acc)}
+.note{color:var(--mut);font-size:.85rem;margin-top:10px}
 .video{position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:var(--bg);border:1px solid var(--line)}
 .video iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .empty{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;text-align:center;padding:16px;color:var(--mut)}
@@ -63,13 +71,15 @@ a{color:var(--acc)}
       <small>Letra / gesto detectado</small>
     </div>
     <div>
-      <h2>Texto formado</h2>
-      <textarea id="text" aria-label="Texto formado pela luva" placeholder="As letras recebidas da luva aparecem aqui..."></textarea>
+      <h2>Texto recebido da luva</h2>
+      <textarea id="text" aria-label="Texto recebido da luva" placeholder="As letras recebidas da luva aparecem aqui (pode ter erros e faltar acentos)..."></textarea>
+      <div id="heard" aria-live="polite"><small>Frase entendida</small><span id="heardTxt">–</span></div>
       <div class="row" style="margin-top:10px">
         <button id="btnClear">Limpar Texto</button>
         <button id="btnVoice">🔊 Voz: Ativada</button>
-        <button id="btnSpeakAll">Ler texto</button>
+        <button id="btnSpeakAll" class="primary">Falar a frase</button>
       </div>
+      <div class="row" style="margin-top:10px"><span style="color:var(--mut)">Falar em:</span><span class="row" id="vlang"></span></div>
     </div>
   </div>
 </section>
@@ -80,8 +90,9 @@ a{color:var(--acc)}
 </section>
 
 <section>
-  <h2>Alfabeto manual (A–Z)</h2>
+  <h2>Alfabeto manual em LIBRAS</h2>
   <div class="alpha" id="alpha"></div>
+  <p class="note">Borda preta: sem movimento. Borda laranja: com movimento (Ç, H, J, K, X, Y, Z). Imagens: Toda Matéria.</p>
 </section>
 
 <section>
@@ -94,140 +105,251 @@ a{color:var(--acc)}
 </section>
 
 <script>
-// ---- Configuração ----
 const DEVICE_NAME = 'LinkGlove-LIBRAS';
 const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
 const CHAR_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
 // Cole aqui o ID da playlist (parte depois de "list=") para já abrir carregada:
 const PLAYLIST_ID = '';
+const IDLE_MS = 2200; // pausa (sem letras novas) antes de falar a frase sozinho
 
-// ---- Dados: nome das letras em PT | ES | IT | DE | EN ----
 const LANGS = [['🇧🇷','Português','pt-BR'],['🇪🇸','Espanhol','es-ES'],['🇮🇹','Italiano','it-IT'],['🇩🇪','Alemão','de-DE'],['🇬🇧','Inglês','en-US']];
+// Nome das letras: PT | ES | IT | DE | EN
 const LN = ('á,a,a,ah,ay|bê,be,bi,beh,bee|cê,ce,ci,tseh,see|dê,de,di,deh,dee|é,e,e,eh,ee|éfe,efe,effe,eff,eff|gê,ge,gi,geh,jee|agá,hache,acca,hah,aych|i,i,i,ih,eye|jota,jota,i lunga,jott,jay|cá,ka,cappa,kah,kay|éle,ele,elle,ell,el|ême,eme,emme,emm,em|êne,ene,enne,enn,en|ó,o,o,oh,oh|pê,pe,pi,peh,pee|quê,cu,cu,kuh,cue|érre,erre,erre,err,ar|ésse,ese,esse,ess,ess|tê,te,ti,teh,tee|u,u,u,uh,you|vê,uve,vu,fau,vee|dáblio,uve doble,doppia vu,weh,double-u|xis,equis,ics,iks,ex|ípsilon,i griega,ipsilon,üpsilon,why|zê,zeta,zeta,tset,zee').split('|').map(s=>s.split(','));
 
-// Dicionário: chave em PT sem acento → [PT, ES, IT, DE, EN]
-const DICT = {
-OI:['Oi','Hola','Ciao','Hallo','Hi'], OLA:['Olá','Hola','Ciao','Hallo','Hello'],
-BOM:['Bom','Bueno','Buono','Gut','Good'], BOA:['Boa','Buena','Buona','Gut','Good'],
-DIA:['Dia','Día','Giorno','Tag','Day'], TARDE:['Tarde','Tarde','Pomeriggio','Nachmittag','Afternoon'],
-NOITE:['Noite','Noche','Notte','Nacht','Night'], SIM:['Sim','Sí','Sì','Ja','Yes'],
-NAO:['Não','No','No','Nein','No'], OBRIGADO:['Obrigado','Gracias','Grazie','Danke','Thank you'],
-OBRIGADA:['Obrigada','Gracias','Grazie','Danke','Thank you'], TCHAU:['Tchau','Adiós','Ciao','Tschüss','Bye'],
-AGUA:['Água','Agua','Acqua','Wasser','Water'], AMOR:['Amor','Amor','Amore','Liebe','Love'],
-AMIGO:['Amigo','Amigo','Amico','Freund','Friend'], FAMILIA:['Família','Familia','Famiglia','Familie','Family'],
-CASA:['Casa','Casa','Casa','Haus','House'], COMER:['Comer','Comer','Mangiare','Essen','Eat'],
-AJUDA:['Ajuda','Ayuda','Aiuto','Hilfe','Help'], DESCULPA:['Desculpa','Perdón','Scusa','Entschuldigung','Sorry'],
-PAZ:['Paz','Paz','Pace','Frieden','Peace'], EU:['Eu','Yo','Io','Ich','I'],
-VOCE:['Você','Tú','Tu','Du','You'], TE:['Te','Te','Ti','Dich','You'],
-AMO:['Amo','Amo','Amo','Liebe','Love'], LIBRAS:['Libras','Libras','Libras','Libras','Libras'],
-PORFAVOR:['Por favor','Por favor','Per favore','Bitte','Please'], BEM:['Bem','Bien','Bene','Gut','Well']
-};
-const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+// Dicionário: PT|ES|IT|DE|EN  (uma entrada por linha; frases também valem)
+const WORDS = `oi|hola|ciao|hallo|hi
+olá|hola|ciao|hallo|hello
+bom dia|buenos días|buongiorno|guten Morgen|good morning
+boa tarde|buenas tardes|buon pomeriggio|guten Tag|good afternoon
+boa noite|buenas noches|buonanotte|gute Nacht|good night
+bom|bueno|buono|gut|good
+boa|buena|buona|gut|good
+dia|día|giorno|Tag|day
+tarde|tarde|pomeriggio|Nachmittag|afternoon
+noite|noche|notte|Nacht|night
+sim|sí|sì|ja|yes
+não|no|no|nein|no
+obrigado|gracias|grazie|danke|thank you
+obrigada|gracias|grazie|danke|thank you
+por favor|por favor|per favore|bitte|please
+desculpa|perdón|scusa|Entschuldigung|sorry
+tchau|adiós|ciao|tschüss|bye
+tudo bem|todo bien|tutto bene|alles gut|all good
+bem|bien|bene|gut|well
+mal|mal|male|schlecht|bad
+muito|mucho|molto|sehr|very
+eu|yo|io|ich|I
+você|tú|tu|du|you
+ele|él|lui|er|he
+ela|ella|lei|sie|she
+nós|nosotros|noi|wir|we
+nome|nombre|nome|Name|name
+meu|mi|mio|mein|my
+qual|cuál|quale|welche|which
+como|cómo|come|wie|how
+onde|dónde|dove|wo|where
+quando|cuándo|quando|wann|when
+quem|quién|chi|wer|who
+quero|quiero|voglio|ich will|I want
+preciso|necesito|ho bisogno|ich brauche|I need
+gosto|me gusta|mi piace|ich mag|I like
+amo|amo|amo|ich liebe|I love
+sou|soy|sono|ich bin|I am
+estou|estoy|sto|ich bin|I am
+tenho|tengo|ho|ich habe|I have
+vou|voy|vado|ich gehe|I go
+posso|puedo|posso|ich kann|I can
+ajuda|ayuda|aiuto|Hilfe|help
+água|agua|acqua|Wasser|water
+comer|comer|mangiare|essen|eat
+beber|beber|bere|trinken|drink
+comida|comida|cibo|Essen|food
+casa|casa|casa|Haus|house
+escola|escuela|scuola|Schule|school
+trabalho|trabajo|lavoro|Arbeit|work
+hoje|hoy|oggi|heute|today
+amanhã|mañana|domani|morgen|tomorrow
+ontem|ayer|ieri|gestern|yesterday
+agora|ahora|adesso|jetzt|now
+aqui|aquí|qui|hier|here
+mãe|madre|mamma|Mutter|mother
+pai|padre|papà|Vater|father
+filho|hijo|figlio|Sohn|son
+filha|hija|figlia|Tochter|daughter
+irmão|hermano|fratello|Bruder|brother
+irmã|hermana|sorella|Schwester|sister
+amigo|amigo|amico|Freund|friend
+amiga|amiga|amica|Freundin|friend
+família|familia|famiglia|Familie|family
+amor|amor|amore|Liebe|love
+paz|paz|pace|Frieden|peace
+feliz|feliz|felice|glücklich|happy
+triste|triste|triste|traurig|sad
+surdo|sordo|sordo|gehörlos|deaf
+ouvinte|oyente|udente|hörend|hearing
+libras|libras|libras|Libras|Libras
+aprender|aprender|imparare|lernen|learn
+falar|hablar|parlare|sprechen|speak
+entender|entender|capire|verstehen|understand
+ler|leer|leggere|lesen|read
+escrever|escribir|scrivere|schreiben|write
+banheiro|baño|bagno|Toilette|bathroom
+hospital|hospital|ospedale|Krankenhaus|hospital
+médico|médico|medico|Arzt|doctor
+remédio|medicina|medicina|Medikament|medicine
+dor|dolor|dolore|Schmerz|pain
+fome|hambre|fame|Hunger|hunger
+sede|sed|sete|Durst|thirst
+frio|frío|freddo|kalt|cold
+calor|calor|caldo|heiß|hot
+dinheiro|dinero|soldi|Geld|money
+telefone|teléfono|telefono|Telefon|phone
+carro|coche|auto|Auto|car
+ônibus|autobús|autobus|Bus|bus
+rua|calle|strada|Straße|street
+cidade|ciudad|città|Stadt|city
+luva|guante|guanto|Handschuh|glove
+com|con|con|mit|with
+para|para|per|für|for
+de|de|di|von|of
+um|un|un|ein|a
+uma|una|una|eine|a`.split('\n').map(l=>{const t=l.split('|');return{k:norm(t[0]).replace(/[^A-Z]/g,''),t}});
 
-// ---- Elementos ----
-const $ = id => document.getElementById(id);
-const textEl = $('text'), letterEl = $('letter'), statusEl = $('status');
-let voiceOn = true, device = null, char = null;
+function norm(s){return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase()}
 
-// ---- Cartões e alfabeto ----
-$('tr').innerHTML = LANGS.map((l,i)=>`<div class="card"><h3>${l[0]} ${l[1]}</h3><p id="t${i}">–</p><small id="n${i}"></small></div>`).join('');
-$('alpha').innerHTML = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map(c=>`<div id="a${c}">${c}</div>`).join('');
+// Letras que a luva pode confundir (formas de mão parecidas): trocar custa pouco
+const CONF = new Set('MN UV PQ BW ES AS AE CO GQ IJ RU KP FT DG'.split(' ').flatMap(p=>[p,p[1]+p[0]]));
+function wcost(a,b){
+  const m=a.length,n=b.length; let prev=Array.from({length:n+1},(_,j)=>j);
+  for(let i=1;i<=m;i++){const cur=[i];
+    for(let j=1;j<=n;j++){
+      const s=a[i-1]===b[j-1]?0:CONF.has(a[i-1]+b[j-1])?0.4:1;
+      cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+s);
+    } prev=cur;}
+  return prev[n];
+}
+// Entende uma sequência de letras: tolera trocas, acentos e falta de espaços.
+// Devolve a lista de palavras do dicionário, ou null se não conseguir cobrir tudo.
+function understand(tok){
+  const s=norm(tok).replace(/[^A-Z]/g,''), n=s.length; if(n<2) return null;
+  const best=[0],back=[];
+  for(let i=1;i<=n;i++){best[i]=Infinity;
+    WORDS.forEach((w,wi)=>{const L=w.k.length; if(L<2) return;
+      for(let l=L-1;l<=L+1;l++){const j=i-l; if(j<0||best[j]===Infinity) continue;
+        const c=wcost(s.slice(j,i),w.k);
+        if(c<=Math.max(0.5,0.34*L)&&best[j]+c+0.3<best[i]){best[i]=best[j]+c+0.3;back[i]=[j,wi];}
+      }});}
+  if(best[n]===Infinity) return null;
+  const out=[]; for(let i=n;i>0;i=back[i][0]) out.unshift(back[i][1]);
+  return out;
+}
 
-function translate(){
-  const raw = textEl.value.trim();
-  const toks = raw ? raw.split(/\s+/) : [];
-  const last = letterEl.textContent;
-  LANGS.forEach((_,i)=>{
-    const out = toks.map(t=>{
-      const k = norm(t);
-      if (DICT[k]) return DICT[k][i];
-      if (k.length===1 && LN[k.charCodeAt(0)-65]) return LN[k.charCodeAt(0)-65][i];
-      return t;
-    }).join(' ');
-    $('t'+i).textContent = out || '–';
-    const k = norm(last);
-    $('n'+i).textContent = (k.length===1 && LN[k.charCodeAt(0)-65]) ? `Letra ${k}: ${LN[k.charCodeAt(0)-65][i]}` : '';
+const $=id=>document.getElementById(id);
+const textEl=$('text'),letterEl=$('letter'),statusEl=$('status');
+let voiceOn=true,vLang=0,device=null,idleT=null,current=[];
+
+$('tr').innerHTML=LANGS.map((l,i)=>`<div class="card" id="c${i}"><h3><span>${l[0]} ${l[1]}</span><button data-sp="${i}" aria-label="Falar em ${l[1]}">🔊</button></h3><p id="t${i}">–</p><small id="n${i}"></small></div>`).join('');
+$('vlang').innerHTML=LANGS.map((l,i)=>`<button class="pill" data-vl="${i}">${l[0]} ${l[1]}</button>`).join('');
+const FILES=[...'ABC','CEDILHA',...'DEFGHIJKLMNOPQRSTUVWXYZ'];
+$('alpha').innerHTML=FILES.map(f=>`<div id="a${f}"><img loading="lazy" src="libras/${f.toLowerCase()}.png" alt="Letra ${f==='CEDILHA'?'Ç':f} em LIBRAS"></div>`).join('');
+
+// Converte o texto recebido em lista de itens {entrada} ou {raw}
+function parse(raw){
+  const items=[];
+  raw.trim().split(/\s+/).filter(Boolean).forEach(tok=>{
+    const u=understand(tok);
+    if(u) u.forEach(wi=>items.push({w:WORDS[wi]})); else items.push({raw:tok});
   });
+  return items;
+}
+function phrase(i){
+  return current.map(it=>{
+    if(it.w) return it.w.t[i];
+    const k=norm(it.raw); return (k.length===1&&LN[k.charCodeAt(0)-65])?LN[k.charCodeAt(0)-65][i]:it.raw;
+  }).join(' ');
+}
+function translate(){
+  current=parse(textEl.value);
+  $('heardTxt').textContent=current.length?phrase(0):'–';
+  const k=norm(letterEl.textContent);
+  LANGS.forEach((_,i)=>{
+    $('t'+i).textContent=phrase(i)||'–';
+    $('n'+i).textContent=(k.length===1&&k>='A'&&k<='Z')?`Letra ${k}: ${LN[k.charCodeAt(0)-65][i]}`:'';
+    $('c'+i).classList.toggle('sel',i===vLang);
+  });
+  document.querySelectorAll('[data-vl]').forEach(b=>b.classList.toggle('sel',+b.dataset.vl===vLang));
 }
 
-function speak(msg){
-  if (!voiceOn || !('speechSynthesis' in window) || !msg) return;
+function speak(msg,lang){
+  if(!('speechSynthesis' in window)||!msg) return;
   speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(msg);
-  u.lang = 'pt-BR';
-  speechSynthesis.speak(u);
+  const u=new SpeechSynthesisUtterance(msg); u.lang=LANGS[lang][2]; speechSynthesis.speak(u);
 }
-
+function speakPhrase(i){speak(phrase(i),i)}
 function highlight(c){
   document.querySelectorAll('.alpha .hit').forEach(e=>e.classList.remove('hit'));
-  const el = $('a'+norm(c)); if (el) el.classList.add('hit');
+  const el=$('a'+norm(c)); if(el) el.classList.add('hit');
 }
 
-// Recebe o que a luva envia: letra, palavra ou comando (_ / ESPACO = espaço, DEL = apagar)
+// Dados da luva: letra ou palavra; "_"/ESPACO = espaço; DEL/APAGAR = apagar
 function onData(msg){
-  msg = msg.trim(); if (!msg) return;
-  const k = norm(msg);
-  if (k==='_' || k==='ESPACO'){ textEl.value += ' '; speak('espaço'); translate(); return; }
-  if (k==='DEL' || k==='APAGAR'){ textEl.value = textEl.value.slice(0,-1); translate(); return; }
-  letterEl.textContent = msg.toUpperCase();
-  highlight(msg);
-  textEl.value += msg.length>1 ? (textEl.value && !/\s$/.test(textEl.value) ? ' ' : '') + msg + ' ' : msg;
-  speak(msg);
+  msg=msg.trim(); if(!msg) return;
+  const k=norm(msg);
+  if(k==='_'||k==='ESPACO') textEl.value+=' ';
+  else if(k==='DEL'||k==='APAGAR') textEl.value=textEl.value.slice(0,-1);
+  else{
+    letterEl.textContent=msg.toUpperCase(); highlight(msg);
+    textEl.value+=msg.length>1?(textEl.value&&!/\s$/.test(textEl.value)?' ':'')+msg+' ':msg;
+    if(voiceOn&&msg.length===1) speak(msg,vLang);
+  }
   translate();
+  clearTimeout(idleT);
+  if(voiceOn) idleT=setTimeout(()=>speakPhrase(vLang),IDLE_MS);
 }
 
-// ---- Bluetooth ----
 function setStatus(on){
-  statusEl.textContent = on ? '🟢 Conectado' : '❌ Desconectado';
-  statusEl.className = on ? 'on' : 'off';
-  $('btnConn').textContent = on ? 'Desconectar' : 'Conectar via Bluetooth';
+  statusEl.textContent=on?'🟢 Conectado':'❌ Desconectado';
+  statusEl.className=on?'on':'off';
+  $('btnConn').textContent=on?'Desconectar':'Conectar via Bluetooth';
 }
-function warn(m){ const w=$('warn'); w.textContent=m; w.style.display=m?'block':'none'; }
-
+function warn(m){const w=$('warn');w.textContent=m;w.style.display=m?'block':'none'}
 async function connect(){
-  if (!navigator.bluetooth){ warn('Este navegador não suporta Web Bluetooth. Use Chrome ou Edge no Android ou computador (no iPhone não funciona).'); return; }
+  if(!navigator.bluetooth){warn('Este navegador não suporta Web Bluetooth. Use Chrome ou Edge no Android ou computador (no iPhone, tente o app Bluefy).');return}
   warn('');
   try{
-    device = await navigator.bluetooth.requestDevice({filters:[{name:DEVICE_NAME}], optionalServices:[SERVICE_UUID]});
-    device.addEventListener('gattserverdisconnected', ()=>setStatus(false));
-    const server = await device.gatt.connect();
-    const service = await server.getPrimaryService(SERVICE_UUID);
-    char = await service.getCharacteristic(CHAR_UUID);
-    await char.startNotifications();
-    char.addEventListener('characteristicvaluechanged', e=>onData(new TextDecoder().decode(e.target.value)));
+    device=await navigator.bluetooth.requestDevice({filters:[{name:DEVICE_NAME}],optionalServices:[SERVICE_UUID]});
+    device.addEventListener('gattserverdisconnected',()=>setStatus(false));
+    const server=await device.gatt.connect();
+    const ch=await (await server.getPrimaryService(SERVICE_UUID)).getCharacteristic(CHAR_UUID);
+    await ch.startNotifications();
+    ch.addEventListener('characteristicvaluechanged',e=>onData(new TextDecoder().decode(e.target.value)));
     setStatus(true);
-  }catch(err){
-    setStatus(false);
-    if (err.name!=='NotFoundError') warn('Não foi possível conectar: '+err.message);
-  }
+  }catch(err){setStatus(false);if(err.name!=='NotFoundError') warn('Não foi possível conectar: '+err.message)}
 }
-$('btnConn').onclick = ()=>{ if (device && device.gatt.connected) device.gatt.disconnect(); else connect(); };
-
-// ---- Botões ----
-$('btnClear').onclick = ()=>{ textEl.value=''; letterEl.textContent='–'; highlight('#'); if ('speechSynthesis' in window) speechSynthesis.cancel(); translate(); };
-$('btnVoice').onclick = ()=>{
-  voiceOn = !voiceOn;
-  $('btnVoice').textContent = voiceOn ? '🔊 Voz: Ativada' : '🔇 Voz: Desativada';
-  if (!voiceOn && 'speechSynthesis' in window) speechSynthesis.cancel();
+$('btnConn').onclick=()=>{if(device&&device.gatt.connected) device.gatt.disconnect(); else connect()};
+$('btnClear').onclick=()=>{textEl.value='';letterEl.textContent='–';highlight('#');clearTimeout(idleT);if('speechSynthesis' in window) speechSynthesis.cancel();translate()};
+$('btnVoice').onclick=()=>{
+  voiceOn=!voiceOn;
+  $('btnVoice').textContent=voiceOn?'🔊 Voz: Ativada':'🔇 Voz: Desativada';
+  if(!voiceOn){clearTimeout(idleT);if('speechSynthesis' in window) speechSynthesis.cancel()}
 };
-$('btnSpeakAll').onclick = ()=>speak(textEl.value);
-textEl.addEventListener('input', translate);
+$('btnSpeakAll').onclick=()=>speakPhrase(vLang);
+document.addEventListener('click',e=>{
+  const sp=e.target.closest('[data-sp]'),vl=e.target.closest('[data-vl]');
+  if(sp) speakPhrase(+sp.dataset.sp);
+  if(vl){vLang=+vl.dataset.vl;translate()}
+});
+textEl.addEventListener('input',translate);
 
-// ---- Vídeo ----
 function loadPlaylist(id){
-  const box = $('video');
-  if (!id){
-    box.innerHTML = '<div class="empty"><p>Cole acima o link de uma playlist de LIBRAS (por exemplo, da TV INES) para assistir aqui.</p><a target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=TV+INES+aulas+de+Libras+playlist">Procurar videoaulas no YouTube</a></div>';
-    return;
-  }
-  box.innerHTML = `<iframe src="https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(id)}" title="Videoaulas de LIBRAS" allow="accelerometer; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
+  const box=$('video');
+  if(!id){box.innerHTML='<div class="empty"><p>Cole acima o link de uma playlist de LIBRAS (por exemplo, da TV INES) para assistir aqui.</p><a target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=TV+INES+aulas+de+Libras+playlist">Procurar videoaulas no YouTube</a></div>';return}
+  box.innerHTML=`<iframe src="https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(id)}" title="Videoaulas de LIBRAS" allow="accelerometer; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
 }
-$('btnPl').onclick = ()=>{
-  const v = $('plUrl').value.trim();
-  const m = v.match(/[?&]list=([\w-]+)/);
-  loadPlaylist(m ? m[1] : (/^[\w-]{10,}$/.test(v) ? v : ''));
+$('btnPl').onclick=()=>{
+  const v=$('plUrl').value.trim(),m=v.match(/[?&]list=([\w-]+)/);
+  loadPlaylist(m?m[1]:(/^[\w-]{10,}$/.test(v)?v:''));
 };
-
 loadPlaylist(PLAYLIST_ID);
 translate();
 </script>
