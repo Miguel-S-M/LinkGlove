@@ -169,6 +169,10 @@ dialog::backdrop{background:#000a}
   <div class="row"><select id="trL" aria-label="Letra a ensinar"></select><button id="btnRec">Gravar 1,5 s</button><button id="btnTrClear">Apagar treino</button><button id="btnExp">Exportar</button><button id="btnImp">Importar</button><input type="file" id="fileImp" accept=".json" hidden></div>
   <h3>Mapa do treino <small style="color:var(--mut);font-weight:400">(verde = 10 ou mais gravações)</small></h3>
   <div id="trMap"></div><small id="trInfo" style="color:var(--mut)"></small>
+  <h3>Treino de sinais (com movimento)</h3>
+  <div class="row"><select id="sgL" aria-label="Sinal a ensinar"></select><button id="btnSgRec" class="primary">Gravar sinal (2 s)</button><button id="btnSgClear">Apagar sinais</button></div>
+  <div id="sgMap" style="margin-top:8px"></div>
+  <p class="note">Ligue a câmera, escolha o sinal, clique em gravar e faça o sinal inteiro depois da contagem. Grave 3 vezes cada um, com pequenas variações. Fique na mesma distância da câmera de sempre.</p>
   <p class="note">Grave também letras parecidas (C e E, U e V). Letras com movimento (Ç, J, K, Z) não são reconhecidas.</p>
 </section>
 </div>
@@ -689,6 +693,40 @@ function detectGesture(){
   return null;
 }
 
+// ===== Sinais com movimento: compara o trajeto da mão (últimos ~1–2 s) com as gravações do treino de sinais =====
+let sgRec = null, sdbg = '', SIGNSAMP = []; try{ SIGNSAMP = JSON.parse(localStorage.getItem('linkglove_sinais_mov')||'[]') }catch(e){}
+const SIGN_MAX = 0.8;     // distância máxima para aceitar um sinal (menor = mais exigente)
+const MOVE_MAX = 0.05;    // mão se movendo mais que isso (fração da imagem em 0,6 s): letras ficam desligadas
+const SW = [9,9,9,9,1,1,1,1,1,1,1,1];
+function frameVec(all, cl){
+  const a=all[0], b=all[all.length-1], f=cl[0].f;
+  return [a[0].x,a[0].y,b[0].x,b[0].y, f[0],f[1],f[2],f[3],f[4],f[6],f[8], all.length-1];
+}
+function resample(fr, n=12){
+  const t0=fr[0].t, t1=fr[fr.length-1].t, out=[];
+  for (let i=0;i<n;i++){ const t=t0+(t1-t0)*i/(n-1); let j=0; while(j<fr.length-1 && fr[j+1].t<=t) j++; out.push(fr[j].v); }
+  return out;
+}
+function seqDist(a,b){
+  let d=0; for (let i=0;i<a.length;i++){ let q=0; for (let k=0;k<SW.length;k++) q+=SW[k]*(a[i][k]-b[i][k])**2; d+=Math.sqrt(q); }
+  const rg=q=>Math.max(...[0,1,2,3].map(k=>Math.max(...q.map(r=>r[k]))-Math.min(...q.map(r=>r[k]))));
+  return d/a.length + 4*Math.abs(rg(a)-rg(b));   // amplitude do movimento também conta
+}
+function recogSign(now){
+  if (!SIGNSAMP.length) return null;
+  const best = {};
+  for (const L of [1000,1500,2000]){
+    const fr = hist.filter(f=>f.v && now-f.t<=L).map(f=>({t:f.t,v:f.v}));
+    if (fr.length<6 || fr[fr.length-1].t-fr[0].t<L*0.7) continue;
+    const q = resample(fr);
+    for (const x of SIGNSAMP){ const d=seqDist(q,x.v); if (d<(best[x.S]===undefined?9:best[x.S])) best[x.S]=d; }
+  }
+  const ds = Object.entries(best).sort((a,b)=>a[1]-b[1]);
+  sdbg = ds.length ? `sinal mais parecido: ${ds[0][0]} (${ds[0][1].toFixed(2)}; limite ${SIGN_MAX})` : '';
+  if (ds.length && ds[0][1]<SIGN_MAX && (ds.length<2 || ds[1][1]>ds[0][1]*1.25)) return norm(ds[0][0]).replace(/[^A-Z]/g,'');
+  return null;
+}
+
 function onHandResults(res){
   const w = cv.videoWidth, h = cv.videoHeight, now = performance.now();
   if (cc.width!==w || cc.height!==h){ cc.width=w; cc.height=h; }
@@ -710,16 +748,21 @@ function onHandResults(res){
     SAMPLES.push({L:rec.L, f:cl[0].f}); recN++;
     const mine = SAMPLES.filter(x=>x.L===rec.L); if (mine.length>60) SAMPLES.splice(SAMPLES.indexOf(mine[0]),1);
   }
-  hist.push({t:now, h:all.map((lm,i)=>({x:lm[0].x, y:lm[9].y, F:cl[i].L==='F', open:cl[i].open, cx:lm[9].x*w, cy:lm[9].y*h, sz:cl[i].size}))});
+  const v = all.length ? frameVec(all,cl) : null;
+  if (sgRec && v) sgRec.frames.push({t:now,v});
+  hist.push({t:now, v, h:all.map((lm,i)=>({x:lm[0].x, y:lm[9].y, F:cl[i].L==='F', open:cl[i].open, cx:lm[9].x*w, cy:lm[9].y*h, sz:cl[i].size}))});
   while (hist.length && now-hist[0].t>GEST_WIN) hist.shift();
-  const g = now<gestLock ? null : detectGesture();
+  const rc6 = hist.filter(f=>now-f.t<=600 && f.h.length), xs6 = rc6.map(f=>f.h[0].x), ys6 = rc6.map(f=>f.h[0].y);
+  const mvNow = rc6.length>3 ? Math.max(Math.max(...xs6)-Math.min(...xs6), Math.max(...ys6)-Math.min(...ys6)) : 0;
+  const g = now<gestLock ? null : (detectGesture() || recogSign(now));
   let L = null;
   if (all.length===1){
-    const c = cl[0]; L = c.L;
+    const c = cl[0]; L = mvNow>MOVE_MAX ? null : c.L;   // mão em movimento não gera letra
     $('camDbg').textContent = `dedos I/M/A/P: ${c.st.join('')} (${c.r.map(v=>v.toFixed(2)).join(' ')}) · polegar ${c.thumb.toFixed(2)} · abertura ${c.gap.toFixed(2)} · dedos para ${c.dir} · cruzado ${c.cr.toFixed(2)} · z ${c.dz.toFixed(2)} · cg ${c.cg.toFixed(2)} · lendo: ${c.L||'?'}${c.rule&&c.rule!==c.L?' (regra: '+c.rule+')':''}`;
   } else $('camDbg').textContent = all.length ? `Duas mãos: ${cl.map(c=>c.L||'?').join(' + ')} (só gestos) · ${gdbg}` : 'Nenhuma mão detectada';
+  if (sdbg && all.length) $('camDbg').textContent += ' · '+sdbg+' · mov '+mvNow.toFixed(2);
   if (now<gestLock) return;                         // pausa depois de um gesto
-  if (g && !prac.on && !gd){
+  if (g && !prac.on && !gd && !sgRec){
     gestLock = now+3000; hist = []; buf = []; held = null; sentLetter = true;
     $('camLetter').textContent = g==='FAMILIA' ? 'FAMÍLIA' : g;
     $('camBar').style.width='100%'; $('camBig').classList.add('sent');
@@ -789,11 +832,13 @@ $('btnRec').onclick = () => {
   setTimeout(()=>{ rec=null; $('btnRec').disabled=false; $('btnRec').textContent='Gravar 1,5 s'; trSave(); trInfo(); }, 1600);
 };
 $('btnTrClear').onclick = () => { if(confirm('Apagar todo o treino?')){ SAMPLES.length=0; trSave(); trInfo(); } };
-$('btnExp').onclick = () => { const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(SAMPLES)],{type:'application/json'})); a.download='treino-linkglove.json'; a.click(); };
+$('btnExp').onclick = () => { const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify({a:SAMPLES,s:SIGNSAMP})],{type:'application/json'})); a.download='treino-linkglove.json'; a.click(); };
 $('btnImp').onclick = () => $('fileImp').click();
 $('fileImp').onchange = async e => {
   try{
-    const arr = JSON.parse(await e.target.files[0].text()); if(!Array.isArray(arr)) throw 0;
+    const obj = JSON.parse(await e.target.files[0].text()), arr = Array.isArray(obj) ? obj : obj.a;
+    if(!Array.isArray(arr)) throw 0;
+    if(Array.isArray(obj.s)){ obj.s.filter(x=>x&&typeof x.S==='string'&&Array.isArray(x.v)&&x.v.length===12).forEach(x=>SIGNSAMP.push(x)); sgSave(); sgInfo(); }
     arr.filter(x=>x&&typeof x.L==='string'&&Array.isArray(x.f)&&x.f.length===10).forEach(x=>SAMPLES.push(x));
     trSave(); trInfo();
   }catch(err){ camMsg('Arquivo de treino inválido.') }
@@ -939,6 +984,28 @@ $('btnFull').onclick = async () => {
   if (!camOn) camStart();
 };
 
+
+// ---- treino de sinais ----
+const SIGNLIST = [...KEY,'Ç','H','J','K','X','Y','Z'];   // palavras + letras que têm movimento
+$('sgL').innerHTML = SIGNLIST.map(k=>`<option>${k}</option>`).join('');
+function sgInfo(m){
+  const c={}; SIGNSAMP.forEach(x=>c[x.S]=(c[x.S]||0)+1);
+  $('sgMap').innerHTML = SIGNLIST.map(k=>`<span class="chip ${c[k]>=3?'ok':''}">${k}${c[k]?' '+c[k]:''}</span>`).join('') + (m?`<div style="color:var(--mut);margin-top:6px">${m}</div>`:'');
+}
+function sgSave(){ try{ localStorage.setItem('linkglove_sinais_mov', JSON.stringify(SIGNSAMP)) }catch(e){} }
+$('btnSgRec').onclick = async () => {
+  if (!camOn){ camMsg('Ligue a câmera antes de gravar.'); return; }
+  const w=$('sgL').value; $('btnSgRec').disabled=true;
+  for (let c=3;c>0;c--){ sgInfo(`Prepare o sinal "${w}"... ${c}`); await sleep(1000); }
+  sgRec={frames:[]}; sgInfo(`Gravando "${w}"... faça o sinal agora`); await sleep(2000);
+  const fr=sgRec.frames; sgRec=null; $('btnSgRec').disabled=false;
+  if (fr.length<10){ sgInfo('Não vi a sua mão. Tente de novo.'); return; }
+  SIGNSAMP.push({S:w, v:resample(fr)});
+  const mine=SIGNSAMP.filter(x=>x.S===w); if (mine.length>8) SIGNSAMP.splice(SIGNSAMP.indexOf(mine[0]),1);
+  sgSave(); sgInfo('✔ Gravado.');
+};
+$('btnSgClear').onclick = () => { if(confirm('Apagar todos os sinais gravados?')){ SIGNSAMP.length=0; sgSave(); sgInfo(); } };
+sgInfo();
 
 loadVid(PLAYLIST_ID||VIDEOS[0][1], !!PLAYLIST_ID);
 translate();
