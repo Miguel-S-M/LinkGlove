@@ -76,6 +76,8 @@ dialog{background:var(--surf);color:var(--tx);border:1px solid var(--line);borde
 dialog::backdrop{background:#000a}
 .pillst{padding:6px 12px;border-radius:999px;background:var(--surf);border:1px solid var(--line);font-size:.9rem}
 #gmOpts button{min-width:120px}
+#gmOpts button.qz-ok{background:#1f7a5c;border-color:var(--ok);color:#fff}
+#gmOpts button.qz-bad{background:#8a2f3f;border-color:var(--bad);color:#fff}
 .fsonly{display:none}
 #camStage:fullscreen{background:var(--bg);padding:12px;grid-template-columns:1fr minmax(260px,360px)}
 #camStage:fullscreen .cam{max-width:none;aspect-ratio:auto;height:100%}
@@ -169,7 +171,7 @@ dialog::backdrop{background:#000a}
 
 <div id="tab-cfg" class="pane">
 <section>
-  <h2>Configurar alfabeto – treino da IA</h2>
+  <div class="row" style="justify-content:space-between;margin-bottom:12px"><h2 style="margin:0">Configurar alfabeto – treino da IA</h2><button id="btnLock">🔒 Trancar</button></div>
   <div class="camgrid">
     <div class="cam"><canvas class="mirror"></canvas><div class="off coff">Câmera desligada</div></div>
     <div class="camside">
@@ -207,7 +209,7 @@ dialog::backdrop{background:#000a}
 </section>
 <section>
   <h2>Jogos de tempo</h2>
-  <div class="row"><select id="gmSel" aria-label="Jogo"></select><button id="btnGm" class="primary">Começar jogo</button><button class="btnCam">Ligar câmera</button><span class="chip" id="gmTime">–</span><span class="chip" id="gmScore">0 pts</span></div>
+  <div class="row"><select id="gmSel" aria-label="Jogo"></select><select id="gmMode" aria-label="Modo do quiz" style="display:none"><option value="normal">Normal (erro não pontua)</option><option value="hc">Hardcore (1 erro encerra)</option></select><button id="btnGm" class="primary">Começar jogo</button><button class="btnCam">Ligar câmera</button><span class="chip" id="gmTime">–</span><span class="chip" id="gmScore">0 pts</span></div>
   <div class="camgrid" style="margin-top:12px">
     <div class="cam"><canvas class="mirror"></canvas><div class="off coff">Câmera desligada</div></div>
     <div class="camside">
@@ -249,6 +251,13 @@ dialog::backdrop{background:#000a}
     <button id="btnPl">Assistir aqui</button>
   </div>
 </section>
+<dialog id="pwDlg">
+  <h3 style="margin:0 0 6px">Área protegida</h3>
+  <p style="color:var(--mut);margin-bottom:10px">Digite a frase para entrar em "Configurar alfabeto".</p>
+  <input type="password" id="pwIn" autocomplete="off" aria-label="Senha" style="width:100%;margin-bottom:10px">
+  <div class="row"><button id="pwOk" class="primary">Entrar</button><button id="pwCancel">Cancelar</button></div>
+  <small id="pwMsg" style="color:var(--bad)"></small>
+</dialog>
 <dialog id="signDlg">
   <h3 id="sgTitle" style="margin:0 0 6px"></h3><div id="sgTr" style="color:var(--mut);margin-bottom:10px"></div>
   <div id="sgDraw" style="margin-bottom:8px"></div>
@@ -860,7 +869,7 @@ function onHandResults(res){
   while (hist.length && now-hist[0].t>GEST_WIN) hist.shift();
   const rc6 = hist.filter(f=>now-f.t<=600 && f.h.length), xs6 = rc6.map(f=>f.h[0].x), ys6 = rc6.map(f=>f.h[0].y);
   const mvNow = rc6.length>3 ? Math.max(Math.max(...xs6)-Math.min(...xs6), Math.max(...ys6)-Math.min(...ys6)) : 0;
-  const g = now<gestLock ? null : (game.on&&game.type==='sinais' ? signTarget(now) : (detectGesture() || recogSign(now)));
+  const g = now<gestLock ? null : (game.on&&game.type==='sinais' ? (game.builtin ? (sdbg='',detectGesture()) : signTarget(now)) : (detectGesture() || recogSign(now)));
   if ($('gmDbg')) $('gmDbg').textContent = game.on&&game.type==='sinais' ? sdbg : '';
   let L = null;
   if (all.length===1){
@@ -919,10 +928,25 @@ async function camStop(){
 }
 document.querySelectorAll('.btnCam').forEach(b=>b.onclick = () => camOn ? camStop() : camStart());
 // ================= Abas, treino, prática, frases, sinais, tela cheia =================
+const cyrb53=(str,seed=0)=>{let h1=0xdeadbeef^seed,h2=0x41c6ce57^seed;for(let i=0,ch;i<str.length;i++){ch=str.charCodeAt(i);h1=Math.imul(h1^ch,2654435761);h2=Math.imul(h2^ch,1597334677);}h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);return 4294967296*(2097151&h2)+(h1>>>0)};
+const PW_HASH = 4168855446176749;   // a senha só é pedida para entrar na aba (não é segurança de verdade: fica no código da página)
+let cfgUnlocked = false; try{ cfgUnlocked = sessionStorage.getItem('linkglove_cfg')==='1' }catch(e){}
+function goTab(t){
+  document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x.dataset.tab===t));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id==='tab-'+t));
+}
+function askPw(){ $('pwIn').value=''; $('pwMsg').textContent=''; $('pwDlg').showModal(); setTimeout(()=>$('pwIn').focus(),50); }
+function tryPw(){
+  if (cyrb53($('pwIn').value.trim())===PW_HASH){ cfgUnlocked=true; try{ sessionStorage.setItem('linkglove_cfg','1') }catch(e){} $('pwDlg').close(); goTab('cfg'); }
+  else { $('pwMsg').textContent='Frase incorreta.'; $('pwIn').select(); }
+}
+$('pwOk').onclick=tryPw; $('pwCancel').onclick=()=>$('pwDlg').close();
+$('pwIn').addEventListener('keydown',e=>{ if(e.key==='Enter') tryPw(); });
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
-  document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));
-  document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id==='tab-'+b.dataset.tab));
+  if (b.dataset.tab==='cfg' && !cfgUnlocked){ askPw(); return; }
+  goTab(b.dataset.tab);
 });
+$('btnLock').onclick=()=>{ cfgUnlocked=false; try{ sessionStorage.removeItem('linkglove_cfg') }catch(e){} goTab('tr'); };
 const kk = x => norm(x).replace(/[^A-Z]/g,'');
 const LABELS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ','EU',...'0123456789'];
 $('trL').innerHTML = LABELS.map(x=>`<option>${x}</option>`).join('');
@@ -1177,13 +1201,15 @@ function gmNext(){
   if(game.type==='letras'){ const p=letterPool(); let t; do{t=rnd(p)}while(t===game.target&&p.length>1); game.target=t; $('gmT').textContent=t; gmShowImg(t); gmMsg('Faça a letra'); }
   else if(game.type==='palavras'){
     const p=letterPool(), ws=WORDS.filter(w=>!w.n&&w.k.length>=2&&w.k.length<=6&&[...w.k].every(c=>p.includes(c)));
-    if(!ws.length){ gmMsg('Treine mais letras para jogar este jogo.'); gmEnd(true); return; }
+    if(!ws.length){ gmMsg('Treine mais letras para jogar este jogo.'); gmEnd(true,true); return; }
     game.target=rnd(ws).k; game.idx=0; gmShow();
   }
   else if(game.type==='sinais'){
-    const p=[...new Set(SIGNSAMP.map(x=>x.S))];
-    if(!p.length){ gmMsg('Grave sinais em "Configurar alfabeto" para jogar.'); gmEnd(true); return; }
-    const s=rnd(p); game.S=s; game.target=norm(s).replace(/[^A-Z]/g,''); $('gmT').textContent=s; gmShowImg(''); gmMsg('Faça o sinal');
+    const tr=[...new Set(SIGNSAMP.map(x=>x.S))], bi=['parar','família','seis sete'].filter(b=>!tr.some(t=>norm(t)===norm(b)));
+    const p=tr.map(s=>({s,b:false})).concat(bi.map(s=>({s,b:true})));
+    let it; do{ it=rnd(p) }while(it.s===game.S&&p.length>1);
+    game.S=it.s; game.builtin=it.b; game.target=norm(it.s).replace(/[^A-Z]/g,'');
+    $('gmT').textContent=it.s; gmShowImg(''); gmMsg(it.b?'Faça este sinal (gesto do site)':'Faça o sinal que você gravou');
   }
   else{
     const ti = vLang || (1+(Math.random()*4|0)), pool=WORDS.filter(w=>!w.n&&w.t[ti]!==w.t[0]), w=rnd(pool), ans=w.t[ti], opts=new Set([ans]); let g=0;
@@ -1208,22 +1234,30 @@ function gameTick(L){   // letras da câmera: segurar 0,6 s
   if(!game.lock&&now-game.t0>=450){ game.lock=true; gameFeed(L); }
 }
 document.addEventListener('click',e=>{
-  const b=e.target.closest('[data-qz]'); if(!b||!game.on||game.type!=='quiz') return;
-  if(b.dataset.qz===game.target){ game.score++; gmMsg('✅ Certo!'); } else gmMsg('❌ Era: '+game.target);
-  gmNext();
+  const b=e.target.closest('[data-qz]'); if(!b||!game.on||game.type!=='quiz'||game.busy) return;
+  game.busy=true; const ok=b.dataset.qz===game.target;
+  document.querySelectorAll('#gmOpts button').forEach(x=>{ if(x.dataset.qz===game.target) x.classList.add('qz-ok'); });
+  if(ok){ game.score++; gmPts(); } else b.classList.add('qz-bad');
+  gmMsg(ok?'✅ Certo!':'❌ Era: '+game.target);
+  setTimeout(()=>{
+    game.busy=false; if(!game.on) return;
+    if(!ok&&game.hc){ gmMsg('❌ Errou: fim de jogo no modo hardcore. Pontos: '+game.score); gmEnd(false,true); }
+    else gmNext();
+  }, ok?600:1100);
 });
 function gmTimer(){ const left=Math.max(0,(game.end-performance.now())/1000); $('gmTime').textContent=Math.ceil(left)+' s'; if(left<=0) gmEnd(false); }
-function gmEnd(manual){
+function gmEnd(manual,keep){
   clearInterval(game.timer); const was=game.on; game.on=false; $('btnGm').textContent='Começar jogo';
   if(!was) return;
-  if(!manual && game.score>0) rankAdd(game.type,game.score);
-  gmMsg('Fim de jogo! Pontos: '+game.score); renderRank();
+  if(!manual && game.score>0) rankAdd(game.type+(game.hc?'hc':''),game.score);
+  if(!keep) gmMsg('Fim de jogo! Pontos: '+game.score);
+  renderRank();
 }
 $('btnGm').onclick=()=>{
   if(game.on){ gmEnd(true); return; }
   const type=$('gmSel').value;
   if(type!=='quiz' && !camOn && !(device&&device.gatt&&device.gatt.connected)){ gmMsg('Ligue a câmera ou conecte a luva para este jogo.'); return; }
-  Object.assign(game,{on:true,type,score:0,end:performance.now()+GAMES[type][1]*1000,idx:0,lock:false,hold:null,target:null});
+  Object.assign(game,{on:true,type,hc:type==='quiz'&&$('gmMode').value==='hc',busy:false,S:null,builtin:false,score:0,end:performance.now()+GAMES[type][1]*1000,idx:0,lock:false,hold:null,target:null});
   $('btnGm').textContent='Parar'; gmNext(); game.timer=setInterval(gmTimer,200); gmTimer();
 };
 const rankGet=()=>{ try{ return JSON.parse(localStorage.getItem('linkglove_rank')||'{}') }catch(e){ return {} } };
@@ -1234,10 +1268,11 @@ function rankAdd(type,score){
   try{ localStorage.setItem('linkglove_rank',JSON.stringify(R)) }catch(e){}
 }
 function renderRank(){
-  const t=$('gmSel').value, L=(rankGet()[t]||[]);
+  const sel=$('gmSel').value, t=sel+(sel==='quiz'&&$('gmMode').value==='hc'?'hc':''), L=(rankGet()[t]||[]);
   $('gmRank').innerHTML=L.length?'<ol style="padding-left:20px">'+L.map(x=>`<li>${x.n}: <b>${x.s}</b> <small style="color:var(--mut)">${x.d}</small></li>`).join('')+'</ol>':'<small style="color:var(--mut)">Ainda sem pontuações neste jogo.</small>';
 }
-$('gmSel').onchange=renderRank; renderRank();
+const gmUpd=()=>{ $('gmMode').style.display=$('gmSel').value==='quiz'?'':'none'; renderRank(); };
+$('gmSel').onchange=gmUpd; $('gmMode').onchange=renderRank; gmUpd();
 
 // ---- perfis de treino ----
 const PROFS=(()=>{ try{ return JSON.parse(localStorage.getItem('linkglove_perfis')||'[]') }catch(e){ return [] } })();
