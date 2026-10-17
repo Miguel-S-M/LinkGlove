@@ -192,7 +192,7 @@ dialog::backdrop{background:#000a}
   <div class="card" id="qpOut" style="margin-top:12px">Toque numa frase para ouvir e ver as traduções.</div>
 </section>
 <section>
-  <h2>30 palavras-chave</h2>
+  <h2>Palavras-chave com sinal</h2>
   <div class="row" id="keys"></div>
   <p class="note">Toque numa palavra para ver o sinal, o vídeo e as traduções.</p>
 </section>
@@ -874,7 +874,7 @@ document.addEventListener('click',e=>{
 });
 
 // ---- 30 palavras-chave com o sinal ----
-const KEY = ['oi','olá','tchau','obrigado','por favor','desculpa','sim','não','bom dia','boa tarde','boa noite','tudo bem','eu','você','nome','família','amigo','amor','casa','água','comer','beber','ajuda','banheiro','hospital','médico','dor','escola','trabalho','feliz'];
+const KEY = ['oi','olá','tchau','obrigado','sim','não','eu','você','família','amor','casa','comer','beber'];
 $('keys').innerHTML = KEY.map(k=>`<button data-kw="${k}">${k}</button>`).join('');
 const sinais = (()=>{ try{ return JSON.parse(localStorage.getItem('linkglove_sinais')||'{}') }catch(e){ return {} } })();
 let kwNow = null;
