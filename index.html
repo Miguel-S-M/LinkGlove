@@ -65,9 +65,25 @@ a{color:var(--acc)}
 .bar i{display:block;height:100%;width:0;background:var(--acc)}
 details{color:var(--mut);font-size:.9rem}
 summary{cursor:pointer;color:var(--acc)}
-#camMsg{color:var(--bad);font-size:.9rem;min-height:1.3em}
+h3{font-size:1rem;margin:14px 0 8px}
+.tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.tabs button{border-radius:999px}
+.tabs button.on{background:var(--acc);color:#241600;border-color:var(--acc);font-weight:700}
+.pane{display:none}.pane.on{display:block}
+.chip{display:inline-block;padding:3px 9px;border-radius:999px;border:1px solid var(--line);margin:2px;font-size:.85rem}
+.chip.ok{border-color:var(--ok);color:var(--ok)}
+dialog{background:var(--surf);color:var(--tx);border:1px solid var(--line);border-radius:16px;padding:18px;width:min(420px,92vw)}
+dialog::backdrop{background:#000a}
+.fsonly{display:none}
+#camStage:fullscreen{background:var(--bg);padding:12px;grid-template-columns:1fr minmax(260px,360px)}
+#camStage:fullscreen .cam{max-width:none;aspect-ratio:auto;height:100%}
+#camStage:fullscreen .camside>small,#camStage:fullscreen #camDbg{display:none}
+#camStage:fullscreen .fsonly{display:flex;flex-direction:column;gap:10px}
+#stTr{font-size:clamp(1.4rem,3vw,2.4rem);font-weight:700;overflow-wrap:anywhere}
+#stRaw{color:var(--mut);overflow-wrap:anywhere}
+.cmsg{color:var(--bad);font-size:.9rem;min-height:1.3em}
 #camDbg{color:var(--mut);font-size:.78rem;font-family:ui-monospace,Consolas,monospace;overflow-wrap:anywhere}
-@media(max-width:720px){.main,.camgrid{grid-template-columns:1fr}}
+@media(max-width:720px){.main,.camgrid{grid-template-columns:1fr}#camStage:fullscreen{grid-template-rows:1fr auto}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -80,6 +96,8 @@ summary{cursor:pointer;color:var(--acc)}
   </div>
 </header>
 <div id="warn"></div>
+<nav class="tabs"><button data-tab="tr" class="on">Tradutor</button><button data-tab="cfg">Configurar alfabeto</button><button data-tab="learn">Aprenda LIBRAS</button></nav>
+<div id="tab-tr" class="pane on">
 
 <section>
   <div class="main">
@@ -104,11 +122,11 @@ summary{cursor:pointer;color:var(--acc)}
 
 <section>
   <h2>Reconhecimento por câmera</h2>
-  <div class="camgrid">
+  <div class="camgrid" id="camStage">
     <div class="cam">
       <video id="camVideo" playsinline muted></video>
       <canvas id="camCanvas"></canvas>
-      <div class="off" id="camOff">Câmera desligada</div>
+      <div class="off coff">Câmera desligada</div>
     </div>
     <div class="camside">
       <div class="big" id="camBig" aria-live="polite">
@@ -116,14 +134,14 @@ summary{cursor:pointer;color:var(--acc)}
         <small>Letra reconhecida pela câmera</small>
         <div class="bar" aria-hidden="true"><i id="camBar"></i></div>
       </div>
-      <button id="btnCam" class="primary">Ligar câmera</button>
-      <div id="camMsg" role="status"></div>
-      <small style="color:var(--mut)">Mantenha a mesma letra por 1 segundo para enviá-la ao texto. Para repetir a mesma letra, tire a mão da imagem um instante. Letras: A, B, C, D, E, F, G, I, L, O, R, U, V, W, Y (dedos para cima) e M, N, Q (dedos para baixo). Sinais: EU (apontar o indicador para si), FAMÍLIA (duas mãos em F que se afastam e se juntam) e 6-7 (as duas mãos sobem e descem alternadas).</small>
-      <details id="train"><summary>Ensinar letras à câmera (treino com a sua mão)</summary>
-        <div class="row" style="margin:8px 0"><select id="trL" aria-label="Letra a ensinar"></select><button id="btnRec">Gravar 1,5 s</button><button id="btnTrClear">Apagar treino</button></div>
-        <small id="trInfo">Ligue a câmera, faça a letra, escolha-a aqui e grave. Grave também as letras parecidas (ex.: C e E), em poses um pouco diferentes. As suas gravações passam a valer mais que as regras.</small>
-      </details>
+      <div class="row"><button class="btnCam primary">Ligar câmera</button><button id="btnFull">⛶ Tela cheia</button></div>
+      <div class="cmsg" role="status"></div>
+      <small style="color:var(--mut)">Mantenha a mesma letra por 1 segundo para enviá-la ao texto. Para repetir a mesma letra, tire a mão da imagem um instante. Letras: A, B, C, D, E, F, G, I, L, O, R, U, V, W, Y (dedos para cima) e M, N, Q (dedos para baixo). Sinais: PARAR (uma mão aberta sobre a outra), EU (apontar o indicador para si), FAMÍLIA (duas mãos em F que se afastam e se juntam) e 6-7 (as duas mãos sobem e descem alternadas).</small>
       <div id="camDbg"></div>
+      <div class="fsonly">
+        <div id="stRaw"></div><div id="stTr"></div>
+        <div class="row"><button id="stSpeak" aria-label="Ouvir a frase">🔊</button><select id="stSel" aria-label="Idioma"></select><button id="btnExit">✕ Sair</button></div>
+      </div>
     </div>
   </div>
 </section>
@@ -133,6 +151,51 @@ summary{cursor:pointer;color:var(--acc)}
   <div class="tr" id="tr"></div>
 </section>
 
+</div>
+
+<div id="tab-cfg" class="pane">
+<section>
+  <h2>Configurar alfabeto – treino da IA</h2>
+  <div class="camgrid">
+    <div class="cam"><canvas class="mirror"></canvas><div class="off coff">Câmera desligada</div></div>
+    <div class="camside">
+      <div class="big"><span id="gdT" style="font-size:2.4rem">–</span><small id="gdMsg">Treino guiado: a câmera pede cada letra e grava sozinha.</small></div>
+      <div class="row"><button class="btnCam primary">Ligar câmera</button><button id="btnGuide">Iniciar treino guiado</button></div>
+      <label style="color:var(--mut)"><input type="checkbox" id="gdNum" style="min-width:0;flex:none"> incluir números 0–9</label>
+      <div class="cmsg" role="status"></div>
+    </div>
+  </div>
+  <h3>Treino manual</h3>
+  <div class="row"><select id="trL" aria-label="Letra a ensinar"></select><button id="btnRec">Gravar 1,5 s</button><button id="btnTrClear">Apagar treino</button><button id="btnExp">Exportar</button><button id="btnImp">Importar</button><input type="file" id="fileImp" accept=".json" hidden></div>
+  <h3>Mapa do treino <small style="color:var(--mut);font-weight:400">(verde = 10 ou mais gravações)</small></h3>
+  <div id="trMap"></div><small id="trInfo" style="color:var(--mut)"></small>
+  <p class="note">Grave também letras parecidas (C e E, U e V). Letras com movimento (Ç, J, K, Z) não são reconhecidas.</p>
+</section>
+</div>
+
+<div id="tab-learn" class="pane">
+<section>
+  <h2>Prática com a câmera</h2>
+  <div class="camgrid">
+    <div class="cam"><canvas class="mirror"></canvas><div class="off coff">Câmera desligada</div></div>
+    <div class="camside">
+      <div class="row"><select id="pracMode" aria-label="Modo"><option value="L">Letras</option><option value="N">Números</option></select><button id="btnPrac" class="primary">Começar prática</button><button class="btnCam">Ligar câmera</button></div>
+      <div class="big"><img id="pracImg" alt="" style="display:none;width:100%;max-width:200px;border-radius:10px"><span id="pracT" style="font-size:3rem">–</span><small id="pracMsg">Ligue a câmera e comece.</small></div>
+      <div class="cmsg" role="status"></div>
+    </div>
+  </div>
+  <p class="note">Números só são reconhecidos depois de treinados na aba "Configurar alfabeto".</p>
+</section>
+<section>
+  <h2>Frases rápidas</h2>
+  <div class="row" id="qp"></div>
+  <div class="card" id="qpOut" style="margin-top:12px">Toque numa frase para ouvir e ver as traduções.</div>
+</section>
+<section>
+  <h2>30 palavras-chave</h2>
+  <div class="row" id="keys"></div>
+  <p class="note">Toque numa palavra para ver o sinal, o vídeo e as traduções.</p>
+</section>
 <section>
   <h2>Alfabeto manual em LIBRAS</h2>
   <div class="alpha" id="alpha"></div>
@@ -141,12 +204,27 @@ summary{cursor:pointer;color:var(--acc)}
 
 <section>
   <h2>Videoaulas de LIBRAS</h2>
+  <div class="row" id="vlist" style="margin-bottom:10px"></div>
   <div class="video" id="video"></div>
   <div class="row" style="margin-top:10px">
-    <input id="plUrl" placeholder="Cole o link de uma playlist do YouTube (…list=PL…)" aria-label="Link da playlist">
-    <button id="btnPl">Carregar playlist</button>
+    <a target="_blank" rel="noopener" href="https://www.youtube.com/@tvines.oficial">Canal TV INES</a>
+    <a target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=MEC+Libras+educa%C3%A7%C3%A3o+especial+inclusiva">Vídeos do MEC</a>
+    <a target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=Canal+Gov+Libras">Canal Gov</a>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <input id="plUrl" placeholder="Cole aqui o link de um vídeo ou playlist do YouTube (TV INES, MEC, Canal Gov…)" aria-label="Link do vídeo ou playlist">
+    <button id="btnPl">Assistir aqui</button>
   </div>
 </section>
+<dialog id="signDlg">
+  <h3 id="sgTitle" style="margin:0 0 6px"></h3><div id="sgTr" style="color:var(--mut);margin-bottom:10px"></div>
+  <div id="sgDraw" style="margin-bottom:8px"></div>
+  <img id="sgImg" alt="Desenho do sinal" style="display:none;width:100%;border-radius:10px;margin-bottom:8px">
+  <p id="sgNone" style="color:var(--mut);font-size:.9rem;margin-bottom:10px">Ainda não há desenho deste sinal. Veja o vídeo ou adicione uma foto ou desenho seu.</p>
+  <div class="row"><button id="sgVid">🎬 Ver vídeo do sinal</button><button id="sgSpeak" aria-label="Ouvir">🔊</button><button id="sgAdd">Adicionar desenho</button><button id="sgDel">Remover</button><button id="sgClose" class="primary">Fechar</button></div>
+  <input type="file" id="sgFile" accept="image/*" hidden>
+</dialog>
+</div>
 
 <script>
 const DEVICE_NAME = 'LinkGlove-LIBRAS';
@@ -258,7 +336,101 @@ para|para|per|für|for
 de|de|di|von|of
 um|un|un|ein|a
 uma|una|una|eine|a
-seis sete|seis siete|sei sette|sechs sieben|six-seven`.split('\n').map(l=>{const t=l.split('|');return{k:norm(t[0]).replace(/[^A-Z]/g,''),t}});
+seis sete|seis siete|sei sette|sechs sieben|six-seven
+dois|dos|due|zwei|two
+três|tres|tre|drei|three
+quatro|cuatro|quattro|vier|four
+cinco|cinco|cinque|fünf|five
+seis|seis|sei|sechs|six
+sete|siete|sette|sieben|seven
+oito|ocho|otto|acht|eight
+nove|nueve|nove|neun|nine
+dez|diez|dieci|zehn|ten
+zero|cero|zero|null|zero
+parar|parar|fermati|stopp|stop
+bonito|bonito|bello|schön|beautiful
+grande|grande|grande|groß|big
+pequeno|pequeño|piccolo|klein|small
+novo|nuevo|nuovo|neu|new
+velho|viejo|vecchio|alt|old
+rápido|rápido|veloce|schnell|fast
+devagar|despacio|piano|langsam|slow
+certo|correcto|giusto|richtig|right
+errado|incorrecto|sbagliato|falsch|wrong
+difícil|difícil|difficile|schwierig|difficult
+fácil|fácil|facile|einfach|easy
+ajudar|ayudar|aiutare|helfen|to help
+gostar|gustar|piacere|mögen|to like
+querer|querer|volere|wollen|to want
+saber|saber|sapere|wissen|to know
+ver|ver|vedere|sehen|see
+ouvir|oír|sentire|hören|hear
+andar|caminar|camminare|gehen|walk
+correr|correr|correre|laufen|run
+dormir|dormir|dormire|schlafen|sleep
+estudar|estudiar|studiare|lernen|study
+brincar|jugar|giocare|spielen|play
+cantar|cantar|cantare|singen|sing
+dançar|bailar|ballare|tanzen|dance
+esperar|esperar|aspettare|warten|wait
+vir|venir|venire|kommen|come
+dar|dar|dare|geben|give
+pegar|coger|prendere|nehmen|take
+abrir|abrir|aprire|öffnen|open
+fechar|cerrar|chiudere|schließen|close
+comprar|comprar|comprare|kaufen|buy
+pagar|pagar|pagare|bezahlen|pay
+caro|caro|caro|teuer|expensive
+barato|barato|economico|billig|cheap
+preço|precio|prezzo|Preis|price
+tempo|tiempo|tempo|Zeit|time
+hora|hora|ora|Uhr|hour
+semana|semana|settimana|Woche|week
+sol|sol|sole|Sonne|sun
+chuva|lluvia|pioggia|Regen|rain
+café|café|caffè|Kaffee|coffee
+leite|leche|latte|Milch|milk
+pão|pan|pane|Brot|bread
+fruta|fruta|frutta|Obst|fruit
+arroz|arroz|riso|Reis|rice
+carne|carne|carne|Fleisch|meat
+peixe|pescado|pesce|Fisch|fish
+cachorro|perro|cane|Hund|dog
+gato|gato|gatto|Katze|cat
+livro|libro|libro|Buch|book
+professor|profesor|professore|Lehrer|teacher
+aluno|alumno|alunno|Schüler|student
+igreja|iglesia|chiesa|Kirche|church
+mercado|mercado|mercato|Markt|market
+farmácia|farmacia|farmacia|Apotheke|pharmacy
+polícia|policía|polizia|Polizei|police
+emergência|emergencia|emergenza|Notfall|emergency
+socorro|socorro|aiuto|Hilfe|help
+cuidado|cuidado|attenzione|Vorsicht|careful
+doente|enfermo|malato|krank|sick
+cansado|cansado|stanco|müde|tired
+bravo|enojado|arrabbiato|wütend|angry
+medo|miedo|paura|Angst|fear
+mulher|mujer|donna|Frau|woman
+homem|hombre|uomo|Mann|man
+criança|niño|bambino|Kind|child
+pessoa|persona|persona|Person|person
+todos|todos|tutti|alle|everyone
+nada|nada|niente|nichts|nothing
+tudo|todo|tutto|alles|everything
+mais|más|più|mehr|more
+menos|menos|meno|weniger|less
+também|también|anche|auch|also
+sempre|siempre|sempre|immer|always
+nunca|nunca|mai|nie|never
+depois|después|dopo|danach|after
+antes|antes|prima|vorher|before
+perto|cerca|vicino|nah|near
+longe|lejos|lontano|weit|far
+direita|derecha|destra|rechts|right (side)
+esquerda|izquierda|sinistra|links|left (side)`.split('\n').map(l=>{const t=l.split('|');return{k:norm(t[0]).replace(/[^A-Z]/g,''),t}});
+const NAMES = 'Miguel,Arthur,Heitor,Bernardo,Davi,Theo,Lorenzo,Gabriel,Pedro,Gael,Matheus,Mateus,Lucas,Benjamin,Nicolas,Guilherme,Rafael,Joaquim,Samuel,Enzo,Joao,Henrique,Murilo,Gustavo,Felipe,Pietro,Isaac,Lucca,Eduardo,Daniel,Bryan,Leonardo,Vinicius,Caio,Thiago,Otavio,Enrico,Anthony,Caua,Ricardo,Carlos,Jose,Paulo,Marcos,Antonio,Fernando,Rodrigo,Bruno,Diego,Andre,Helena,Alice,Laura,Maria,Valentina,Heloisa,Sophia,Isabella,Manuela,Julia,Luiza,Livia,Cecilia,Eloa,Giovanna,Beatriz,Mariana,Lara,Ana,Lorena,Isadora,Melissa,Amanda,Leticia,Camila,Gabriela,Fernanda,Larissa,Bianca,Carolina,Rafaela,Vitoria,Natalia,Aline,Patricia,Juliana,Bruna,Jessica,Sandra,Raquel,Renata,Tatiana,Priscila,Luciana,Marcela,Paula,Clara,Sara,Yasmin,Emily';
+NAMES.split(',').forEach(n=>WORDS.push({k:norm(n).replace(/[^A-Z]/g,''),t:[n,n,n,n,n],n:true}));
 
 function norm(s){return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase()}
 
@@ -282,7 +454,8 @@ function understand(tok){
     WORDS.forEach((w,wi)=>{const L=w.k.length; if(L<2) return;
       for(let l=L-1;l<=L+1;l++){const j=i-l; if(j<0||best[j]===Infinity) continue;
         const c=wcost(s.slice(j,i),w.k);
-        if(c<=Math.max(0.5,0.34*L)&&best[j]+c+0.3<best[i]){best[i]=best[j]+c+0.3;back[i]=[j,wi];}
+        const tol=w.n?(L<=5?0.5:0.8):(L<=3?0.5:L<=5?0.8:L<=7?1.2:0.34*L);
+        if(c<=tol&&best[j]+c+0.3<best[i]){best[i]=best[j]+c+0.3;back[i]=[j,wi];}
       }});}
   if(best[n]===Infinity) return null;
   const out=[]; for(let i=n;i>0;i=back[i][0]) out.unshift(back[i][1]);
@@ -325,6 +498,7 @@ function translate(){
     $('c'+i).classList.toggle('sel',i===vLang);
   });
   document.querySelectorAll('[data-vl]').forEach(b=>b.classList.toggle('sel',+b.dataset.vl===vLang));
+  if($('stTr')){ $('stTr').textContent=phrase(vLang)||'–'; $('stRaw').textContent=textEl.value; $('stSel').value=vLang; }
 }
 
 let voices=[], spT=null;
@@ -410,14 +584,16 @@ $('rate').value=store('vel')||0.85; $('rate').onchange=e=>store('vel',e.target.v
 if(synth) synth.onvoiceschanged=updateVoiceSelect;
 updateVoiceSelect();
 
-function loadPlaylist(id){
-  const box=$('video');
-  if(!id){box.innerHTML='<div class="empty"><p>Cole acima o link de uma playlist de LIBRAS (por exemplo, da TV INES) para assistir aqui.</p><a target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=TV+INES+aulas+de+Libras+playlist">Procurar videoaulas no YouTube</a></div>';return}
-  box.innerHTML=`<iframe src="https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(id)}" title="Videoaulas de LIBRAS" allow="accelerometer; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
+// Vídeos sugeridos (encontrados por busca; confirme o canal de origem). Cole outros links no campo abaixo do player.
+const VIDEOS=[['Curso básico de Libras (INES)','_j-gkWhJs7w'],['A Vida em Libras: obrigado, água… em outros países','WHGaShBtKYo'],['A Vida em Libras: dinheiro e banco','-gn34MLN8Yw'],['A Vida em Libras: escola','Y_SiGWPqH9o'],['TV INES – Aula de Libras: Cores','nVpc00JDfS4']];
+function loadVid(id,list){
+  $('video').innerHTML=`<iframe src="https://www.youtube-nocookie.com/embed/${list?'videoseries?list=':''}${encodeURIComponent(id)}" title="Videoaula de LIBRAS" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" loading="lazy"></iframe>`;
 }
+$('vlist').innerHTML=VIDEOS.map((v,i)=>`<button data-vid="${i}">${v[0]}</button>`).join('');
+document.addEventListener('click',e=>{const b=e.target.closest('[data-vid]'); if(b) loadVid(VIDEOS[+b.dataset.vid][1])});
 $('btnPl').onclick=()=>{
-  const v=$('plUrl').value.trim(),m=v.match(/[?&]list=([\w-]+)/);
-  loadPlaylist(m?m[1]:(/^[\w-]{10,}$/.test(v)?v:''));
+  const v=$('plUrl').value.trim(), l=v.match(/[?&]list=([\w-]+)/), w=v.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/);
+  if(l) loadVid(l[1],true); else if(w) loadVid(w[1]); else { $('plUrl').value=''; $('plUrl').placeholder='Link inválido. Cole um link do YouTube (vídeo ou playlist).'; }
 };
 
 // ================= Câmera + MediaPipe Hands =================
@@ -475,7 +651,7 @@ function classify(lm, w, h){
   else if (nH>=3 && !st.some(E) && cg>0.55 && cg<1.4) L='C';
   const f = [r[0],r[1],r[2],r[3],thumb,gap,cg,cm,k*1.5,cr*3];
   const rule = L; const kn = knn(f); if (kn) L = kn;
-  return {L, rule, st, r, thumb, gap, dir, cr, dz, cg, f};
+  return {L, rule, st, r, thumb, gap, dir, cr, dz, cg, f, size, open: st.every(E)};
 }
 
 function camSend(L){
@@ -488,9 +664,17 @@ function camSend(L){
   if (p>=1){ sentLetter=true; $('camBig').classList.add('sent'); onData(L); }   // mesma função da luva Bluetooth
 }
 
-let hist = [], gestLock = 0, gdbg = '', rec = null;
+let hist = [], gestLock = 0, gdbg = '', rec = null, recN = 0;
+const prac = {on:false, t:null, t0:0, lock:false, score:0};
+let gd = null;
 function detectGesture(){
   const fr = hist.filter(f=>f.h.length===2);
+  // PARAR: duas mãos abertas, uma sobre a outra, paradas por ~0,7 s
+  const tN = fr.length ? fr[fr.length-1].t : 0, rc = fr.filter(f=>tN-f.t<=900);
+  if (rc.length>=6 && rc[rc.length-1].t-rc[0].t>=600){
+    const ok = rc.filter(f=>{const [p,q]=f.h; if(!p.open||!q.open) return false; const z=(p.sz+q.sz)/2, dx=Math.abs(p.cx-q.cx)/z, dy=Math.abs(p.cy-q.cy)/z; return dx<=1.2 && dy>=0.3 && dy<=2.2}).length;
+    if (ok/rc.length>=0.8) return 'PARAR';
+  }
   if (fr.length<10 || fr[fr.length-1].t-fr[0].t<900) return null;
   const A=fr.map(f=>f.h[0].y), B=fr.map(f=>f.h[1].y), D=fr.map(f=>Math.abs(f.h[1].x-f.h[0].x));
   const rng=a=>Math.max(...a)-Math.min(...a);
@@ -516,12 +700,17 @@ function onHandResults(res){
     cx.fillStyle='#5eead4';
     lm.forEach(q=>{cx.beginPath();cx.arc(q.x*w,q.y*h,4,0,6.283);cx.fill()});
   });
+  document.querySelectorAll('canvas.mirror').forEach(m=>{
+    if(!m.offsetParent) return;
+    if(m.width!==w||m.height!==h){m.width=w;m.height=h}
+    const c=m.getContext('2d'); c.drawImage(cv,0,0,w,h); c.drawImage(cc,0,0);
+  });
   const cl = all.map(lm=>classify(lm,w,h));
   if (rec && now<rec.until && all.length===1){
-    SAMPLES.push({L:rec.L, f:cl[0].f});
+    SAMPLES.push({L:rec.L, f:cl[0].f}); recN++;
     const mine = SAMPLES.filter(x=>x.L===rec.L); if (mine.length>60) SAMPLES.splice(SAMPLES.indexOf(mine[0]),1);
   }
-  hist.push({t:now, h:all.map((lm,i)=>({x:lm[0].x, y:lm[9].y, F:cl[i].L==='F'}))});
+  hist.push({t:now, h:all.map((lm,i)=>({x:lm[0].x, y:lm[9].y, F:cl[i].L==='F', open:cl[i].open, cx:lm[9].x*w, cy:lm[9].y*h, sz:cl[i].size}))});
   while (hist.length && now-hist[0].t>GEST_WIN) hist.shift();
   const g = now<gestLock ? null : detectGesture();
   let L = null;
@@ -530,7 +719,7 @@ function onHandResults(res){
     $('camDbg').textContent = `dedos I/M/A/P: ${c.st.join('')} (${c.r.map(v=>v.toFixed(2)).join(' ')}) · polegar ${c.thumb.toFixed(2)} · abertura ${c.gap.toFixed(2)} · dedos para ${c.dir} · cruzado ${c.cr.toFixed(2)} · z ${c.dz.toFixed(2)} · cg ${c.cg.toFixed(2)} · lendo: ${c.L||'?'}${c.rule&&c.rule!==c.L?' (regra: '+c.rule+')':''}`;
   } else $('camDbg').textContent = all.length ? `Duas mãos: ${cl.map(c=>c.L||'?').join(' + ')} (só gestos) · ${gdbg}` : 'Nenhuma mão detectada';
   if (now<gestLock) return;                         // pausa depois de um gesto
-  if (g){
+  if (g && !prac.on && !gd){
     gestLock = now+3000; hist = []; buf = []; held = null; sentLetter = true;
     $('camLetter').textContent = g==='FAMILIA' ? 'FAMÍLIA' : g;
     $('camBar').style.width='100%'; $('camBig').classList.add('sent');
@@ -542,10 +731,12 @@ function onHandResults(res){
   const top = Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0];
   const stable = top && cnt[top]>=5 ? top : null;
   $('camLetter').textContent = stable || '–';
+  if (prac.on || gd){ if (prac.on) practiceTick(stable); return; }   // treino/prática não escrevem no texto
   camSend(stable);
 }
 
-function camMsg(m){ $('camMsg').textContent = m }
+function camMsg(m){ document.querySelectorAll('.cmsg').forEach(e=>e.textContent=m) }
+function camBtn(t,dis){ document.querySelectorAll('.btnCam').forEach(b=>{ if(t!==null) b.textContent=t; b.disabled=dis }) }
 async function camStart(){
   camMsg('');
   if (typeof Hands==='undefined' || typeof Camera==='undefined'){ camMsg('Não foi possível carregar o MediaPipe (verifique a internet).'); return; }
@@ -557,31 +748,38 @@ async function camStart(){
       hands.onResults(onHandResults);
     }
     cam = new Camera(cv, {onFrame: async()=>{ await hands.send({image:cv}) }, width:640, height:480, facingMode:'user'});
-    $('btnCam').disabled = true; camMsg('Iniciando câmera...');
+    camBtn(null,true); camMsg('Iniciando câmera...');
     await cam.start();
     camOn = true; buf = []; held = null;
-    $('camOff').style.display='none'; $('btnCam').textContent='Desligar câmera'; camMsg('');
+    document.querySelectorAll('.coff').forEach(e=>e.style.display='none'); camBtn('Desligar câmera',false); camMsg('');
   }catch(err){
     camOn = false;
     camMsg(err.name==='NotAllowedError' ? 'Permissão da câmera negada. Libere o acesso no cadeado ao lado do endereço do site e tente de novo.'
          : err.name==='NotFoundError' ? 'Nenhuma câmera encontrada neste dispositivo.'
          : err.name==='NotReadableError' ? 'A câmera está em uso por outro programa.'
          : 'Erro ao ligar a câmera: '+(err.message||err.name));
-  }finally{ $('btnCam').disabled = false; }
+  }finally{ camBtn(null,false); }
 }
 async function camStop(){
   try{ if (cam) await cam.stop() }catch(e){}
   if (cv.srcObject){ cv.srcObject.getTracks().forEach(t=>t.stop()); cv.srcObject=null; }
   camOn = false; cx.clearRect(0,0,cc.width,cc.height); camSend(null);
-  $('camLetter').textContent='–'; $('camDbg').textContent=''; $('camOff').style.display='flex';
-  $('btnCam').textContent='Ligar câmera';
+  $('camLetter').textContent='–'; $('camDbg').textContent=''; document.querySelectorAll('.coff').forEach(e=>e.style.display='flex');
+  camBtn('Ligar câmera',false);
 }
-$('btnCam').onclick = () => camOn ? camStop() : camStart();
-$('trL').innerHTML = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ','EU'].map(x=>`<option>${x}</option>`).join('');
+document.querySelectorAll('.btnCam').forEach(b=>b.onclick = () => camOn ? camStop() : camStart());
+// ================= Abas, treino, prática, frases, sinais, tela cheia =================
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id==='tab-'+b.dataset.tab));
+});
+const kk = x => norm(x).replace(/[^A-Z]/g,'');
+const LABELS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ','EU',...'0123456789'];
+$('trL').innerHTML = LABELS.map(x=>`<option>${x}</option>`).join('');
 function trInfo(){
   const c={}; SAMPLES.forEach(x=>c[x.L]=(c[x.L]||0)+1);
-  const t=Object.keys(c).sort().map(k=>k+':'+c[k]).join('  ');
-  $('trInfo').textContent = t ? 'Gravações: '+t : 'Nenhuma gravação ainda.';
+  $('trMap').innerHTML = LABELS.map(k=>`<span class="chip ${c[k]>=10?'ok':''}">${k}${c[k]?' '+c[k]:''}</span>`).join('');
+  $('trInfo').textContent = SAMPLES.length ? 'Total de gravações: '+SAMPLES.length : 'Nenhuma gravação ainda.';
 }
 function trSave(){ try{ localStorage.setItem('linkglove_amostras', JSON.stringify(SAMPLES)) }catch(e){} }
 $('btnRec').onclick = () => {
@@ -590,10 +788,159 @@ $('btnRec').onclick = () => {
   $('btnRec').disabled = true; $('btnRec').textContent = 'Gravando '+rec.L+'...';
   setTimeout(()=>{ rec=null; $('btnRec').disabled=false; $('btnRec').textContent='Gravar 1,5 s'; trSave(); trInfo(); }, 1600);
 };
-$('btnTrClear').onclick = () => { SAMPLES.length=0; trSave(); trInfo(); };
+$('btnTrClear').onclick = () => { if(confirm('Apagar todo o treino?')){ SAMPLES.length=0; trSave(); trInfo(); } };
+$('btnExp').onclick = () => { const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(SAMPLES)],{type:'application/json'})); a.download='treino-linkglove.json'; a.click(); };
+$('btnImp').onclick = () => $('fileImp').click();
+$('fileImp').onchange = async e => {
+  try{
+    const arr = JSON.parse(await e.target.files[0].text()); if(!Array.isArray(arr)) throw 0;
+    arr.filter(x=>x&&typeof x.L==='string'&&Array.isArray(x.f)&&x.f.length===10).forEach(x=>SAMPLES.push(x));
+    trSave(); trInfo();
+  }catch(err){ camMsg('Arquivo de treino inválido.') }
+  e.target.value='';
+};
 trInfo();
 
-loadPlaylist(PLAYLIST_ID);
+// ---- treino guiado ----
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+const gdMsg = m => $('gdMsg').textContent = m;
+function showGd(L){ const im=IMG[L.toLowerCase()]; $('gdT').innerHTML=(im?`<img src="${im}" alt="" style="width:100%;max-width:200px;border-radius:10px;display:block;margin:0 auto 6px">`:'')+`<b>${L}</b>`; }
+$('btnGuide').onclick = async () => {
+  if (gd){ gd.stop=true; gd=null; $('btnGuide').textContent='Iniciar treino guiado'; gdMsg('Treino interrompido.'); return; }
+  if (!camOn){ camMsg('Ligue a câmera antes.'); return; }
+  const me = gd = {stop:false}, seq = [...'ABCDEFGHILMNOPQRSTUVWXY', ...($('gdNum').checked?'0123456789':'')];
+  $('btnGuide').textContent='Parar treino';
+  for (const L of seq){
+    for (let tries=0; tries<3; tries++){
+      if (me.stop) return;
+      showGd(L);
+      for (let c=3;c>0;c--){ gdMsg(`Faça ${L} e segure... ${c}`); await sleep(1000); if(me.stop) return; }
+      const n0=recN; rec={L,until:performance.now()+1500}; gdMsg('Gravando '+L+'...'); await sleep(1600); rec=null;
+      if (recN-n0>=5){ trSave(); trInfo(); gdMsg('✔ '+L+' gravado'); await sleep(500); break; }
+      gdMsg('Não vi a sua mão. Vamos repetir...'); await sleep(900);
+    }
+  }
+  gd=null; $('btnGuide').textContent='Iniciar treino guiado'; gdMsg('Treino concluído! 🎉'); $('gdT').textContent='✅';
+};
+
+// ---- prática ----
+const pracMsg = m => $('pracMsg').textContent = m;
+function pracNext(){
+  const num = $('pracMode').value==='N', trained=[...new Set(SAMPLES.map(x=>x.L))];
+  const pool = num ? trained.filter(x=>/^\d$/.test(x)) : [...new Set([...'ABCDEFGILMNOQRUVWY',...trained.filter(x=>/^[A-Z]$/.test(x))])];
+  if (!pool.length){ prac.on=false; $('btnPrac').textContent='Começar prática'; pracMsg('Nenhum número treinado ainda.'); return; }
+  let t; do { t=pool[Math.random()*pool.length|0] } while (t===prac.t && pool.length>1);
+  prac.t=t; prac.t0=0; prac.lock=false;
+  const im=IMG[t.toLowerCase()]; $('pracImg').style.display=(im&&!num)?'block':'none'; if(im) $('pracImg').src=im;
+  $('pracT').textContent=t; pracMsg(`Faça ${num?'o número':'a letra'} ${t}`);
+}
+function practiceTick(L){
+  if (!prac.on||prac.lock) return;
+  const now=performance.now();
+  if (L===prac.t){
+    if (!prac.t0) prac.t0=now;
+    if (now-prac.t0>=700){ prac.lock=true; prac.score++; pracMsg('✅ Correto! Acertos: '+prac.score); setTimeout(()=>{ if(prac.on) pracNext() },1000); }
+  } else { prac.t0=0; pracMsg(`Faça ${prac.t} (vendo: ${L||'–'})`); }
+}
+$('btnPrac').onclick = () => {
+  if (prac.on){ prac.on=false; $('btnPrac').textContent='Começar prática'; pracMsg('Prática encerrada. Acertos: '+prac.score); return; }
+  if (!camOn){ camMsg('Ligue a câmera antes.'); return; }
+  prac.on=true; prac.score=0; prac.t=null; $('btnPrac').textContent='Parar prática'; pracNext();
+};
+
+// ---- frases rápidas ----
+const QP = `bom dia|buenos días|buongiorno|guten Morgen|good morning
+boa tarde|buenas tardes|buon pomeriggio|guten Tag|good afternoon
+boa noite|buenas noches|buonanotte|gute Nacht|good night
+tudo bem?|¿todo bien?|tutto bene?|alles gut?|all good?
+meu nome é...|me llamo...|mi chiamo...|ich heiße...|my name is...
+eu sou surdo|soy sordo|sono sordo|ich bin gehörlos|I am deaf
+você entende Libras?|¿entiendes Libras?|capisci la Libras?|verstehst du Libras?|do you understand Libras?
+pode repetir?|¿puedes repetir?|puoi ripetere?|kannst du das wiederholen?|can you repeat?
+preciso de ajuda|necesito ayuda|ho bisogno di aiuto|ich brauche Hilfe|I need help
+onde fica o banheiro?|¿dónde está el baño?|dov'è il bagno?|wo ist die Toilette?|where is the bathroom?
+quanto custa?|¿cuánto cuesta?|quanto costa?|was kostet das?|how much is it?
+eu quero água|quiero agua|voglio acqua|ich möchte Wasser|I want water
+estou com dor|me duele|ho dolore|ich habe Schmerzen|I am in pain
+chame um médico|llama a un médico|chiama un medico|rufen Sie einen Arzt|call a doctor
+obrigado, tchau!|¡gracias, adiós!|grazie, ciao!|danke, tschüss!|thank you, bye!`.split('\n').map(l=>l.split('|'));
+$('qp').innerHTML = QP.map((q,i)=>`<button data-qp="${i}">${q[0]}</button>`).join('');
+const sinalURL = t => 'https://www.youtube.com/results?search_query='+encodeURIComponent('sinal de '+t+' em Libras');
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-qp]'); if(!b) return;
+  const q=QP[+b.dataset.qp];
+  $('qpOut').innerHTML = LANGS.map((l,i)=>`<div>${l[0]} <b>${q[i]}</b></div>`).join('')+`<div style="margin-top:8px"><a target="_blank" rel="noopener" href="${sinalURL(q[0])}">🎬 ver como fazer o sinal</a></div>`;
+  speak(q[vLang],vLang);
+});
+
+// ---- 30 palavras-chave com o sinal ----
+const KEY = ['oi','olá','tchau','obrigado','por favor','desculpa','sim','não','bom dia','boa tarde','boa noite','tudo bem','eu','você','nome','família','amigo','amor','casa','água','comer','beber','ajuda','banheiro','hospital','médico','dor','escola','trabalho','feliz'];
+$('keys').innerHTML = KEY.map(k=>`<button data-kw="${k}">${k}</button>`).join('');
+const sinais = (()=>{ try{ return JSON.parse(localStorage.getItem('linkglove_sinais')||'{}') }catch(e){ return {} } })();
+let kwNow = null;
+// [forma da mão, local, movimento, nº de mãos, descrição] – esquemas aproximados, só dos sinais de que tenho mais certeza
+const SIGNS = {
+ 'oi':['B','lado','aceno',1,'Mão aberta ao lado do rosto, acenando.'],
+ 'olá':['B','lado','aceno',1,'Mão aberta ao lado do rosto, acenando.'],
+ 'tchau':['B','frente','aceno',1,'Mão aberta à frente, acenando.'],
+ 'obrigado':['B','queixo','afasta',1,'Mão aberta toca o queixo e se afasta para a frente.'],
+ 'sim':['A','frente','baixo',1,'Mão fechada balança para baixo, como um aceno de "sim".'],
+ 'não':['D','frente','aceno',1,'Indicador levantado balança de um lado para o outro.'],
+ 'eu':['D','peito','toque',1,'Indicador aponta para o próprio peito.'],
+ 'você':['D','frente','afasta',1,'Indicador aponta para a pessoa à sua frente.'],
+ 'família':['F','frente','circ',2,'As duas mãos em F fazem um círculo à frente do peito, abrindo e se juntando.'],
+ 'amor':['A','peito','toque',2,'Os braços se cruzam sobre o peito, com as mãos fechadas.'],
+ 'casa':['B','frente','toque',2,'As duas mãos abertas se encontram em forma de telhado.'],
+ 'comer':['O','boca','toque',1,'Dedos juntos tocam a boca, como levar comida.'],
+ 'beber':['C','boca','cima',1,'Mão em C vai à boca e inclina, como beber de um copo.']
+};
+function drawSign([h,loc,mv,n,cap]){
+  const [x,y]={lado:[96,34],frente:[60,118],queixo:[60,57],boca:[60,47],peito:[60,108]}[loc], V={baixo:[0,22],cima:[0,-22],afasta:[16,20]}[mv];
+  let m=(n===2&&loc!=='lado'?[[x-16,y],[x+16,y]]:[[x,y]]).map(([a,b])=>`<circle cx="${a}" cy="${b}" r="6" fill="#ffb454"/>`).join('');
+  if(V) m+=`<line x1="${x}" y1="${y}" x2="${x+V[0]}" y2="${y+V[1]}" stroke="#5eead4" stroke-width="3" marker-end="url(#ah)"/>`;
+  if(mv==='aceno') m+=`<line x1="${x-16}" y1="${y+14}" x2="${x+16}" y2="${y+14}" stroke="#5eead4" stroke-width="3" marker-start="url(#ah)" marker-end="url(#ah)"/>`;
+  if(mv==='circ') m+=`<circle cx="${x}" cy="${y}" r="20" fill="none" stroke="#5eead4" stroke-width="3" stroke-dasharray="5 4"/>`;
+  if(mv==='toque') m+=`<circle cx="${x}" cy="${y}" r="12" fill="none" stroke="#5eead4" stroke-width="2"/>`;
+  return `<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><svg viewBox="0 0 120 150" width="120" role="img" aria-label="Local e movimento do sinal"><defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5eead4"/></marker></defs><circle cx="60" cy="35" r="22" fill="#2c3260"/><path d="M12 150Q12 88 60 88Q108 88 108 150Z" fill="#2c3260"/>${m}</svg><div style="flex:1;min-width:140px"><img src="${IMG[h.toLowerCase()]}" alt="Forma da mão ${h}" style="width:110px;border-radius:8px"><p style="margin-top:6px">${cap}</p><small style="color:var(--mut)">Forma da mão: ${h}${n===2?' (as duas mãos)':''}. Esquema aproximado: confira no vídeo.</small></div></div>`;
+}
+function openSign(k){
+  const w = WORDS.find(x=>x.k===kk(k)); kwNow=k; if(!w) return;
+  $('sgTitle').textContent = w.t[0];
+  $('sgTr').innerHTML = LANGS.map((l,i)=>`${l[0]} ${w.t[i]}`).join(' &nbsp; ');
+  const im = sinais[k], sg = SIGNS[k]; $('sgImg').style.display = im?'block':'none'; if(im) $('sgImg').src=im; $('sgDraw').innerHTML = (!im&&sg) ? drawSign(sg) : ''; $('sgNone').style.display = (im||sg)?'none':'block';
+  if(!$('signDlg').open) $('signDlg').showModal();
+}
+document.addEventListener('click',e=>{ const b=e.target.closest('[data-kw]'); if(b) openSign(b.dataset.kw) });
+$('sgClose').onclick = () => $('signDlg').close();
+$('sgVid').onclick = () => window.open(sinalURL(kwNow),'_blank','noopener');
+$('sgSpeak').onclick = () => { const w=WORDS.find(x=>x.k===kk(kwNow)); if(w) speak(w.t[vLang],vLang) };
+$('sgAdd').onclick = () => $('sgFile').click();
+$('sgFile').onchange = e => {
+  const f=e.target.files[0]; if(!f) return;
+  const img=new Image(); img.onload=()=>{
+    const sc=Math.min(1,360/Math.max(img.width,img.height)), c=document.createElement('canvas');
+    c.width=img.width*sc; c.height=img.height*sc; c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    sinais[kwNow]=c.toDataURL('image/jpeg',0.8);
+    try{ localStorage.setItem('linkglove_sinais',JSON.stringify(sinais)) }catch(err){ camMsg('Sem espaço para guardar a imagem.') }
+    openSign(kwNow);
+  };
+  img.src=URL.createObjectURL(f); e.target.value='';
+};
+$('sgDel').onclick = () => { delete sinais[kwNow]; try{ localStorage.setItem('linkglove_sinais',JSON.stringify(sinais)) }catch(err){} $('sgImg').style.display='none'; $('sgNone').style.display='block'; };
+
+// ---- tela cheia da câmera ----
+$('stSel').innerHTML = LANGS.map((l,i)=>`<option value="${i}">${l[0]} ${l[1]}</option>`).join('');
+$('stSel').onchange = e => { vLang=+e.target.value; updateVoiceSelect(); translate(); };
+$('stSpeak').onclick = () => speakPhrase(vLang);
+$('btnExit').onclick = () => { if(document.fullscreenElement) document.exitFullscreen() };
+$('btnFull').onclick = async () => {
+  const el=$('camStage');
+  try{ await (el.requestFullscreen||el.webkitRequestFullscreen).call(el) }catch(err){ camMsg('Não foi possível abrir em tela cheia.'); return; }
+  if (!camOn) camStart();
+};
+
+
+loadVid(PLAYLIST_ID||VIDEOS[0][1], !!PLAYLIST_ID);
 translate();
 </script>
 </body>
