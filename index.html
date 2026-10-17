@@ -74,6 +74,8 @@ h3{font-size:1rem;margin:14px 0 8px}
 .chip.ok{border-color:var(--ok);color:var(--ok)}
 dialog{background:var(--surf);color:var(--tx);border:1px solid var(--line);border-radius:16px;padding:18px;width:min(420px,92vw)}
 dialog::backdrop{background:#000a}
+.pillst{padding:6px 12px;border-radius:999px;background:var(--surf);border:1px solid var(--line);font-size:.9rem}
+#gmOpts button{min-width:120px}
 .fsonly{display:none}
 #camStage:fullscreen{background:var(--bg);padding:12px;grid-template-columns:1fr minmax(260px,360px)}
 #camStage:fullscreen .cam{max-width:none;aspect-ratio:auto;height:100%}
@@ -95,6 +97,8 @@ dialog::backdrop{background:#000a}
     <button id="btnConn" class="primary">Conectar via Bluetooth</button>
   </div>
 </header>
+<div class="row" id="statusbar" style="margin-bottom:10px"><span class="pillst" id="stMode" title="Hardware: só a luva · Software: só a câmera · Híbrido: os dois juntos"></span><span class="pillst" id="stBle"></span><span class="pillst" id="stData"></span><span class="pillst" id="stBat"></span><span class="pillst" id="stCam"></span></div>
+<div id="compat" style="margin-bottom:14px"></div>
 <div id="warn"></div>
 <nav class="tabs"><button data-tab="tr" class="on">Tradutor</button><button data-tab="cfg">Configurar alfabeto</button><button data-tab="learn">Aprenda LIBRAS</button></nav>
 <div id="tab-tr" class="pane on">
@@ -151,6 +155,16 @@ dialog::backdrop{background:#000a}
   <div class="tr" id="tr"></div>
 </section>
 
+<section>
+  <h2>Conversa: escutar e traduzir</h2>
+  <div class="row"><label style="color:var(--mut)">A pessoa fala em <select id="spLang"></select></label><button id="btnListen" class="primary">🎤 Escutar e traduzir</button></div>
+  <div class="tr" style="margin-top:12px">
+    <div class="card"><h3>Ouvido</h3><p id="spOrig">–</p></div>
+    <div class="card"><h3><span>Tradução <span id="spTarget"></span></span><button id="spSpeak" aria-label="Ouvir a tradução">🔊</button></h3><p id="spTr" style="font-size:1.5rem">–</p></div>
+  </div>
+  <div class="row" style="margin-top:10px"><input id="spIn" placeholder="Sem microfone? Digite aqui o que a pessoa disse" aria-label="Texto para traduzir"><button id="btnSpTr">Traduzir texto</button></div>
+  <small id="spMsg" style="color:var(--mut)"></small>
+</section>
 </div>
 
 <div id="tab-cfg" class="pane">
@@ -165,6 +179,7 @@ dialog::backdrop{background:#000a}
       <div class="cmsg" role="status"></div>
     </div>
   </div>
+  <div class="row" style="margin-top:12px"><label style="color:var(--mut)">Perfil de treino <select id="profSel"></select></label><button id="btnProf">Novo perfil</button></div>
   <h3>Treino manual</h3>
   <div class="row"><select id="trL" aria-label="Letra a ensinar"></select><button id="btnRec">Gravar 1,5 s</button><button id="btnTrClear">Apagar treino</button><button id="btnExp">Exportar</button><button id="btnImp">Importar</button><input type="file" id="fileImp" accept=".json" hidden></div>
   <h3>Mapa do treino <small style="color:var(--mut);font-weight:400">(verde = 10 ou mais gravações)</small></h3>
@@ -189,6 +204,19 @@ dialog::backdrop{background:#000a}
     </div>
   </div>
   <p class="note">Números só são reconhecidos depois de treinados na aba "Configurar alfabeto".</p>
+</section>
+<section>
+  <h2>Jogos de tempo</h2>
+  <div class="row"><select id="gmSel" aria-label="Jogo"></select><button id="btnGm" class="primary">Começar jogo</button><button class="btnCam">Ligar câmera</button><span class="chip" id="gmTime">–</span><span class="chip" id="gmScore">0 pts</span></div>
+  <div class="camgrid" style="margin-top:12px">
+    <div class="cam"><canvas class="mirror"></canvas><div class="off coff">Câmera desligada</div></div>
+    <div class="camside">
+      <div class="big"><img id="gmImg" alt="" style="display:none;width:100%;max-width:150px;border-radius:10px"><span id="gmT" style="font-size:2.4rem">–</span><small id="gmMsg">Escolha um jogo. Letras e sinais usam a câmera ou a luva; o quiz funciona em qualquer dispositivo.</small></div>
+      <div class="row" id="gmOpts"></div>
+      <div class="cmsg" role="status"></div>
+    </div>
+  </div>
+  <h3>Ranking (neste dispositivo)</h3><div id="gmRank"></div>
 </section>
 <section>
   <h2>Frases rápidas</h2>
@@ -502,6 +530,7 @@ function translate(){
     $('c'+i).classList.toggle('sel',i===vLang);
   });
   document.querySelectorAll('[data-vl]').forEach(b=>b.classList.toggle('sel',+b.dataset.vl===vLang));
+  if($('spTarget')) $('spTarget').textContent=LANGS[vLang][0]+' '+LANGS[vLang][1];
   if($('stTr')){ $('stTr').textContent=phrase(vLang)||'–'; $('stRaw').textContent=textEl.value; $('stSel').value=vLang; }
 }
 
@@ -535,8 +564,13 @@ function highlight(c){
 }
 
 // Dados da luva: letra ou palavra; "_"/ESPACO = espaço; DEL/APAGAR = apagar
-function onData(msg){
+let lastIn={m:'',src:'',t:0};
+function onData(msg,src='glove'){
   msg=msg.trim(); if(!msg) return;
+  if(game.on&&game.type!=='quiz'){ gameFeed(msg); return; }
+  const mu=msg.toUpperCase(), nowT=Date.now();
+  if(lastIn.src&&src!==lastIn.src&&mu===lastIn.m&&nowT-lastIn.t<1500) return;   // luva e câmera mandaram o mesmo: vale uma vez
+  lastIn={m:mu,src,t:nowT};
   const k=norm(msg);
   if(k==='_'||k==='ESPACO') textEl.value+=' ';
   else if(k==='DEL'||k==='APAGAR') textEl.value=textEl.value.slice(0,-1);
@@ -556,20 +590,33 @@ function setStatus(on){
   $('btnConn').textContent=on?'Desconectar':'Conectar via Bluetooth';
 }
 function warn(m){const w=$('warn');w.textContent=m;w.style.display=m?'block':'none'}
+let lastGlove=0, batLevel=null, manualDisc=false;
+async function bleSetup(server){
+  const ch=await (await server.getPrimaryService(SERVICE_UUID)).getCharacteristic(CHAR_UUID);
+  await ch.startNotifications();
+  ch.addEventListener('characteristicvaluechanged',e=>{ lastGlove=Date.now(); onData(new TextDecoder().decode(e.target.value),'glove'); });
+  batLevel=null;
+  try{   // bateria: serviço padrão do Bluetooth (0x180F), se a luva tiver
+    const bc=await (await server.getPrimaryService('battery_service')).getCharacteristic('battery_level');
+    batLevel=(await bc.readValue()).getUint8(0);
+    await bc.startNotifications(); bc.addEventListener('characteristicvaluechanged',e=>{ batLevel=e.target.value.getUint8(0) });
+  }catch(e){}
+}
 async function connect(){
   if(!navigator.bluetooth){warn('Este navegador não suporta Web Bluetooth. Use Chrome ou Edge no Android ou computador (no iPhone, tente o app Bluefy).');return}
   warn('');
   try{
-    device=await navigator.bluetooth.requestDevice({filters:[{name:DEVICE_NAME}],optionalServices:[SERVICE_UUID]});
-    device.addEventListener('gattserverdisconnected',()=>setStatus(false));
-    const server=await device.gatt.connect();
-    const ch=await (await server.getPrimaryService(SERVICE_UUID)).getCharacteristic(CHAR_UUID);
-    await ch.startNotifications();
-    ch.addEventListener('characteristicvaluechanged',e=>onData(new TextDecoder().decode(e.target.value)));
+    device=await navigator.bluetooth.requestDevice({filters:[{name:DEVICE_NAME}],optionalServices:[SERVICE_UUID,'battery_service']});
+    device.addEventListener('gattserverdisconnected',async()=>{
+      setStatus(false);
+      if(manualDisc){ manualDisc=false; return; }
+      for(let i=0;i<3;i++){ await sleep(2000); try{ await bleSetup(await device.gatt.connect()); setStatus(true); return; }catch(e){} }
+    });
+    await bleSetup(await device.gatt.connect());
     setStatus(true);
   }catch(err){setStatus(false);if(err.name!=='NotFoundError') warn('Não foi possível conectar: '+err.message)}
 }
-$('btnConn').onclick=()=>{if(device&&device.gatt.connected) device.gatt.disconnect(); else connect()};
+$('btnConn').onclick=()=>{if(device&&device.gatt.connected){ manualDisc=true; device.gatt.disconnect(); } else connect()};
 $('btnClear').onclick=()=>{textEl.value='';letterEl.textContent='–';highlight('#');clearTimeout(idleT);if('speechSynthesis' in window) speechSynthesis.cancel();translate()};
 $('btnVoice').onclick=()=>{
   voiceOn=!voiceOn;
@@ -607,7 +654,9 @@ const CURL = [1.25,1.25,1.25,1.2];        // abaixo = dedo dobrado
 const THUMB_OUT = 1.3;                    // distância polegar–base do mínimo ÷ tamanho da mão: acima = polegar aberto
 const V_GAP = 1.6;
 const KNN_MAX = 0.8;                      // distância máxima para uma gravação sua valer
-let SAMPLES = []; try{ SAMPLES = JSON.parse(localStorage.getItem('linkglove_amostras')||'[]') }catch(e){}
+let PROF = ''; try{ PROF = localStorage.getItem('linkglove_perfil')||'' }catch(e){}
+const pk = b => b+(PROF?'_'+PROF:'');
+let SAMPLES = []; try{ SAMPLES = JSON.parse(localStorage.getItem(pk('linkglove_amostras'))||'[]') }catch(e){}
 function knn(f){
   if (!SAMPLES.length) return null;
   const ds = SAMPLES.map(x=>({L:x.L, d:Math.hypot(...x.f.map((v,i)=>v-f[i]))})).sort((a,b)=>a.d-b.d).slice(0,5).filter(x=>x.d<=KNN_MAX);
@@ -665,11 +714,12 @@ function camSend(L){
   if (sentLetter) return;
   const p = Math.min(1,(now-heldSince)/HOLD_MS);
   $('camBar').style.width = (p*100)+'%';
-  if (p>=1){ sentLetter=true; $('camBig').classList.add('sent'); onData(L); }   // mesma função da luva Bluetooth
+  if (p>=1){ sentLetter=true; $('camBig').classList.add('sent'); onData(L,'cam'); }   // mesma função da luva Bluetooth
 }
 
 let hist = [], gestLock = 0, gdbg = '', rec = null, recN = 0;
 const prac = {on:false, t:null, t0:0, lock:false, score:0};
+const game = {on:false, type:null, score:0, end:0, target:null, idx:0, t0:0, lock:false, hold:null, timer:null};
 let gd = null;
 function detectGesture(){
   const fr = hist.filter(f=>f.h.length===2);
@@ -693,8 +743,50 @@ function detectGesture(){
   return null;
 }
 
+// ===== Suavização dos pontos da mão: reduz o tremor e a distorção quando um dedo passa atrás de outro =====
+const SM = [];
+const CHAINS = [[0,1,2,3,4],[0,5,6,7,8],[0,9,10,11,12],[0,13,14,15,16],[0,17,18,19,20]];
+function smoothHands(raw, now, W, H){
+  if (SM.length!==raw.length){ SM.length=0; raw.forEach(()=>SM.push(null)); }
+  return raw.map((lm,s)=>{
+    let st = SM[s];
+    if (!st || Math.hypot(lm[0].x-st.wx, lm[0].y-st.wy)>0.3) st = SM[s] = {f:lm.map(q=>({x:q.x,y:q.y,z:q.z,dx:0,dy:0,dz:0})), t:now, n:0, bl:{}, wx:lm[0].x, wy:lm[0].y};
+    const dt = Math.max(0.005,(now-st.t)/1000); st.t = now; st.n++;
+    const sz0 = Math.hypot((lm[9].x-lm[0].x)*W,(lm[9].y-lm[0].y)*H) || 1;
+    const out = lm.map((q,i)=>{
+      const f=st.f[i], r={};
+      // ponto que "pula" em relação ao pulso de um quadro para o outro = dedo escondido errando: quase ignora
+      const outl = i>0 && Math.hypot(((q.x-lm[0].x)-(f.x-st.f[0].x))*W, ((q.y-lm[0].y)-(f.y-st.f[0].y))*H) > 0.3*sz0;
+      for (const k of ['x','y','z']){
+        const d = (q[k]-f[k])/dt;
+        f['d'+k] += (1/(1+(1/(2*Math.PI))/dt))*(d-f['d'+k]);
+        const fc = 1.2+10*Math.abs(f['d'+k]);
+        f[k] += Math.min(outl?0.12:1, 1/(1+(1/(2*Math.PI*fc))/dt))*(q[k]-f[k]);
+        r[k] = f[k];
+      }
+      return r;
+    });
+    // comprimento dos ossos: um dedo meio escondido não pode esticar nem encolher de repente
+    const size = Math.hypot((out[9].x-out[0].x)*W,(out[9].y-out[0].y)*H) || 1;
+    CHAINS.forEach(ch=>{
+      for (let j=1;j<ch.length;j++){
+        const a=ch[j-1], b=ch[j], key=a+'-'+b;
+        const dx=(out[b].x-out[a].x)*W, dy=(out[b].y-out[a].y)*H, len=Math.hypot(dx,dy), rl=len/size, ref=st.bl[key];
+        if (ref===undefined){ st.bl[key]=rl; continue; }
+        if (st.n<20 || (rl>0.75*ref && rl<1.25*ref)) st.bl[key] = ref*0.95+rl*0.05;
+        if (st.n>=20 && len>0){
+          const L2 = Math.min(1.25*ref*size, Math.max(0.45*ref*size, len));
+          if (L2!==len){ const k=L2/len, mx=(dx*k-dx)/W, my=(dy*k-dy)/H; for (let m=j;m<ch.length;m++){ out[ch[m]].x+=mx; out[ch[m]].y+=my; } }
+        }
+      }
+    });
+    st.wx=out[0].x; st.wy=out[0].y;
+    return out;
+  });
+}
+
 // ===== Sinais com movimento: compara o trajeto da mão (últimos ~1–2 s) com as gravações do treino de sinais =====
-let sgRec = null, sdbg = '', SIGNSAMP = []; try{ SIGNSAMP = JSON.parse(localStorage.getItem('linkglove_sinais_mov')||'[]') }catch(e){}
+let sgRec = null, sdbg = '', SIGNSAMP = []; try{ SIGNSAMP = JSON.parse(localStorage.getItem(pk('linkglove_sinais_mov'))||'[]') }catch(e){}
 const SIGN_MAX = 0.8;     // distância máxima para aceitar um sinal (menor = mais exigente)
 const MOVE_MAX = 0.05;    // mão se movendo mais que isso (fração da imagem em 0,6 s): letras ficam desligadas
 const SW = [9,9,9,9,1,1,1,1,1,1,1,1];
@@ -731,7 +823,7 @@ function onHandResults(res){
   const w = cv.videoWidth, h = cv.videoHeight, now = performance.now();
   if (cc.width!==w || cc.height!==h){ cc.width=w; cc.height=h; }
   cx.clearRect(0,0,w,h);
-  const all = (res.multiHandLandmarks||[]).slice(0,2).sort((p,q)=>p[0].x-q[0].x);
+  const all = smoothHands((res.multiHandLandmarks||[]).slice(0,2).sort((p,q)=>p[0].x-q[0].x), now, w, h);
   all.forEach(lm=>{
     cx.lineWidth=3; cx.strokeStyle='#ffb454';
     CONN.forEach(([a,b])=>{cx.beginPath();cx.moveTo(lm[a].x*w,lm[a].y*h);cx.lineTo(lm[b].x*w,lm[b].y*h);cx.stroke()});
@@ -763,10 +855,10 @@ function onHandResults(res){
   if (sdbg && all.length) $('camDbg').textContent += ' · '+sdbg+' · mov '+mvNow.toFixed(2);
   if (now<gestLock) return;                         // pausa depois de um gesto
   if (g && !prac.on && !gd && !sgRec){
-    gestLock = now+3000; hist = []; buf = []; held = null; sentLetter = true;
+    gestLock = now+(game.on?1200:3000); hist = []; buf = []; held = null; sentLetter = true;
     $('camLetter').textContent = g==='FAMILIA' ? 'FAMÍLIA' : g;
     $('camBar').style.width='100%'; $('camBig').classList.add('sent');
-    onData(g); return;
+    if (game.on) gameFeed(g); else onData(g,'cam'); return;
   }
   // suavização: a letra só vale se aparecer em 5 dos últimos 7 quadros
   buf.push(L); if (buf.length>7) buf.shift();
@@ -774,7 +866,7 @@ function onHandResults(res){
   const top = Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0];
   const stable = top && cnt[top]>=5 ? top : null;
   $('camLetter').textContent = stable || '–';
-  if (prac.on || gd){ if (prac.on) practiceTick(stable); return; }   // treino/prática não escrevem no texto
+  if (prac.on || gd || (game.on && game.type!=='quiz')){ if (prac.on) practiceTick(stable); else if (game.on) gameTick(stable); return; }   // treino/prática não escrevem no texto
   camSend(stable);
 }
 
@@ -824,7 +916,7 @@ function trInfo(){
   $('trMap').innerHTML = LABELS.map(k=>`<span class="chip ${c[k]>=10?'ok':''}">${k}${c[k]?' '+c[k]:''}</span>`).join('');
   $('trInfo').textContent = SAMPLES.length ? 'Total de gravações: '+SAMPLES.length : 'Nenhuma gravação ainda.';
 }
-function trSave(){ try{ localStorage.setItem('linkglove_amostras', JSON.stringify(SAMPLES)) }catch(e){} }
+function trSave(){ try{ localStorage.setItem(pk('linkglove_amostras'), JSON.stringify(SAMPLES)) }catch(e){} }
 $('btnRec').onclick = () => {
   if (!camOn){ camMsg('Ligue a câmera antes de gravar.'); return; }
   rec = {L:$('trL').value, until:performance.now()+1500};
@@ -992,7 +1084,7 @@ function sgInfo(m){
   const c={}; SIGNSAMP.forEach(x=>c[x.S]=(c[x.S]||0)+1);
   $('sgMap').innerHTML = SIGNLIST.map(k=>`<span class="chip ${c[k]>=3?'ok':''}">${k}${c[k]?' '+c[k]:''}</span>`).join('') + (m?`<div style="color:var(--mut);margin-top:6px">${m}</div>`:'');
 }
-function sgSave(){ try{ localStorage.setItem('linkglove_sinais_mov', JSON.stringify(SIGNSAMP)) }catch(e){} }
+function sgSave(){ try{ localStorage.setItem(pk('linkglove_sinais_mov'), JSON.stringify(SIGNSAMP)) }catch(e){} }
 $('btnSgRec').onclick = async () => {
   if (!camOn){ camMsg('Ligue a câmera antes de gravar.'); return; }
   const w=$('sgL').value; $('btnSgRec').disabled=true;
@@ -1006,6 +1098,142 @@ $('btnSgRec').onclick = async () => {
 };
 $('btnSgClear').onclick = () => { if(confirm('Apagar todos os sinais gravados?')){ SIGNSAMP.length=0; sgSave(); sgInfo(); } };
 sgInfo();
+
+// ================= Status, compatibilidade, conversa por voz, jogos, perfis =================
+function updStatus(){
+  const ble=!!(device&&device.gatt&&device.gatt.connected);
+  const mode = ble&&camOn ? ['🔀','Híbrido'] : ble ? ['🧤','Hardware'] : camOn ? ['📷','Software'] : ['⏸','Nenhum'];
+  const ago = lastGlove ? Math.round((Date.now()-lastGlove)/1000) : null;
+  $('stMode').textContent = `${mode[0]} Modo: ${mode[1]}`;
+  $('stBle').textContent = ble ? '🟢 Luva conectada' : '❌ Luva desconectada';
+  $('stData').textContent = !ble ? '📡 –' : ago===null ? '📡 aguardando dados' : ago<4 ? '📡 dados em tempo real' : `📡 sem dados há ${ago} s`;
+  $('stBat').textContent = '🔋 '+(!ble ? '–' : batLevel===null ? 'bateria não informada' : batLevel+'%');
+  $('stCam').textContent = camOn ? '📷 Câmera ligada' : '📷 Câmera desligada';
+}
+setInterval(updStatus,1000); updStatus();
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+(function(){
+  const CAP=[['Câmera',!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)],['Bluetooth (luva)',!!navigator.bluetooth],['Ouvir e traduzir',!!SR],['Voz (fala)',!!synth]];
+  $('compat').innerHTML = CAP.map(([n,ok])=>`<span class="chip ${ok?'ok':''}">${ok?'✔':'✖'} ${n}</span>`).join('')
+    + (navigator.bluetooth?'':' <small style="color:var(--mut)">Sem Bluetooth neste navegador: use a câmera, ou o Chrome/Edge (Android e computador), ou o app Bluefy no iPhone.</small>')
+    + (SR?'':' <small style="color:var(--mut)">Sem reconhecimento de voz aqui: dá para digitar o texto para traduzir.</small>');
+})();
+
+// ---- conversa: escutar e traduzir ----
+$('spLang').innerHTML = LANGS.map((l,i)=>`<option value="${i}">${l[0]} ${l[1]}</option>`).join('');
+async function translateText(text,from,to){
+  if (from===to) return text;
+  try{ if ('Translator' in self){ const o={sourceLanguage:from,targetLanguage:to}; if ((await Translator.availability(o))!=='unavailable') return await (await Translator.create(o)).translate(text); } }catch(e){}
+  try{ const r=await fetch('https://api.mymemory.translated.net/get?q='+encodeURIComponent(text)+'&langpair='+encodeURIComponent(from+'|'+to)); const j=await r.json(), t=j.responseData&&j.responseData.translatedText; if(t&&!/MYMEMORY WARNING|INVALID/i.test(t)) return t; }catch(e){}
+  return null;
+}
+async function doTr(text){
+  text=text.trim(); if(!text) return;
+  $('spOrig').textContent=text; $('spTr').textContent='…';
+  const t=await translateText(text,LANGS[+$('spLang').value][2].slice(0,2),LANGS[vLang][2].slice(0,2));
+  $('spTr').textContent=t||text;
+  $('spMsg').textContent=t?'':'Não consegui traduzir (sem internet?). Mostrando o texto original.';
+}
+let spRec=null;
+$('btnListen').onclick=()=>{
+  if(!SR){ $('spMsg').textContent='Este navegador não tem reconhecimento de voz (use Chrome, Edge ou Safari). Digite o texto abaixo.'; return; }
+  if(spRec){ spRec.stop(); return; }
+  const r=spRec=new SR(); r.lang=LANGS[+$('spLang').value][2]; r.interimResults=true; r.continuous=false;
+  r.onstart=()=>{ $('btnListen').textContent='⏹ Ouvindo...'; $('spMsg').textContent=''; };
+  r.onresult=e=>{ let txt='',fin=false; for(const x of e.results){ txt+=x[0].transcript; if(x.isFinal) fin=true; } $('spOrig').textContent=txt; if(fin) doTr(txt); };
+  r.onerror=e=>{ $('spMsg').textContent = e.error==='not-allowed' ? 'Permita o microfone no navegador.' : e.error==='no-speech' ? 'Não ouvi nada. Tente de novo.' : 'Erro no microfone: '+e.error; };
+  r.onend=()=>{ spRec=null; $('btnListen').textContent='🎤 Escutar e traduzir'; };
+  r.start();
+};
+$('btnSpTr').onclick=()=>doTr($('spIn').value);
+$('spSpeak').onclick=()=>speak($('spTr').textContent,vLang);
+
+// ---- jogos de tempo ----
+const GAMES={letras:['Corrida das letras (60 s)',60],palavras:['Soletrar palavras (90 s)',90],sinais:['Sinais com movimento (60 s)',60],quiz:['Quiz de tradução (60 s)',60]};
+$('gmSel').innerHTML=Object.entries(GAMES).map(([k,v])=>`<option value="${k}">${v[0]}</option>`).join('');
+const gmMsg=m=>$('gmMsg').textContent=m;
+const gmPts=()=>$('gmScore').textContent=game.score+' pts';
+const letterPool=()=>[...new Set([...'ABCDEFGILMNOQRUVWY',...SAMPLES.map(x=>x.L).filter(x=>/^[A-Z]$/.test(x))])];
+const rnd=a=>a[Math.random()*a.length|0];
+function gmShowImg(L){ const im=IMG[(L||'').toLowerCase()]; $('gmImg').style.display=im?'block':'none'; if(im) $('gmImg').src=im; }
+function gmNext(){
+  $('gmOpts').innerHTML='';
+  if(game.type==='letras'){ const p=letterPool(); let t; do{t=rnd(p)}while(t===game.target&&p.length>1); game.target=t; $('gmT').textContent=t; gmShowImg(t); gmMsg('Faça a letra'); }
+  else if(game.type==='palavras'){
+    const p=letterPool(), ws=WORDS.filter(w=>!w.n&&w.k.length>=2&&w.k.length<=6&&[...w.k].every(c=>p.includes(c)));
+    if(!ws.length){ gmMsg('Treine mais letras para jogar este jogo.'); gmEnd(true); return; }
+    game.target=rnd(ws).k; game.idx=0; gmShow();
+  }
+  else if(game.type==='sinais'){
+    const p=[...new Set(SIGNSAMP.map(x=>x.S))];
+    if(!p.length){ gmMsg('Grave sinais em "Configurar alfabeto" para jogar.'); gmEnd(true); return; }
+    const s=rnd(p); game.target=norm(s).replace(/[^A-Z]/g,''); $('gmT').textContent=s; gmShowImg(''); gmMsg('Faça o sinal');
+  }
+  else{
+    const pool=WORDS.filter(w=>!w.n), w=rnd(pool), ans=w.t[vLang], opts=new Set([ans]); let g=0;
+    while(opts.size<4&&g++<60) opts.add(rnd(pool).t[vLang]);
+    game.target=ans; $('gmT').textContent=w.t[0]; gmShowImg(''); gmMsg('Como se diz em '+LANGS[vLang][1]+'?');
+    $('gmOpts').innerHTML=[...opts].sort(()=>Math.random()-.5).map(o=>`<button data-qz="${o.replace(/"/g,'&quot;')}">${o}</button>`).join('');
+  }
+  gmPts();
+}
+function gmShow(){ const t=game.target; $('gmT').innerHTML=`<span style="color:var(--ok)">${t.slice(0,game.idx)}</span>${t.slice(game.idx)}`; gmShowImg(t[game.idx]); gmMsg('Soletre a palavra, letra por letra'); }
+function gameFeed(tok){
+  if(!game.on) return; tok=norm(tok).replace(/[^A-Z0-9]/g,'');
+  if(game.type==='palavras'){
+    if(tok===game.target[game.idx]){ game.idx++; if(game.idx>=game.target.length){ game.score+=game.target.length; gmMsg('✅ '+game.target); gmNext(); } else gmShow(); gmPts(); }
+  } else if(game.type!=='quiz' && tok===game.target){ game.score++; gmMsg('✅ Certo!'); gmNext(); }
+}
+function gameTick(L){   // letras da câmera: segurar 0,6 s
+  if(!game.on||game.type==='quiz'||game.type==='sinais') return;
+  const now=performance.now();
+  if(!L){ game.hold=null; game.lock=false; return; }
+  if(L!==game.hold){ game.hold=L; game.t0=now; game.lock=false; return; }
+  if(!game.lock&&now-game.t0>=600){ game.lock=true; gameFeed(L); }
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-qz]'); if(!b||!game.on||game.type!=='quiz') return;
+  if(b.dataset.qz===game.target){ game.score++; gmMsg('✅ Certo!'); } else gmMsg('❌ Era: '+game.target);
+  gmNext();
+});
+function gmTimer(){ const left=Math.max(0,(game.end-performance.now())/1000); $('gmTime').textContent=Math.ceil(left)+' s'; if(left<=0) gmEnd(false); }
+function gmEnd(manual){
+  clearInterval(game.timer); const was=game.on; game.on=false; $('btnGm').textContent='Começar jogo';
+  if(!was) return;
+  if(!manual && game.score>0) rankAdd(game.type,game.score);
+  gmMsg('Fim de jogo! Pontos: '+game.score); renderRank();
+}
+$('btnGm').onclick=()=>{
+  if(game.on){ gmEnd(true); return; }
+  const type=$('gmSel').value;
+  if(type!=='quiz' && !camOn && !(device&&device.gatt&&device.gatt.connected)){ gmMsg('Ligue a câmera ou conecte a luva para este jogo.'); return; }
+  Object.assign(game,{on:true,type,score:0,end:performance.now()+GAMES[type][1]*1000,idx:0,lock:false,hold:null,target:null});
+  $('btnGm').textContent='Parar'; gmNext(); game.timer=setInterval(gmTimer,200); gmTimer();
+};
+const rankGet=()=>{ try{ return JSON.parse(localStorage.getItem('linkglove_rank')||'{}') }catch(e){ return {} } };
+function rankAdd(type,score){
+  const name=(prompt('Pontos: '+score+'. Seu nome para o ranking:',PROF||'Jogador')||'').trim()||'Jogador', R=rankGet();
+  (R[type]=R[type]||[]).push({n:name,s:score,d:new Date().toLocaleDateString('pt-BR')});
+  R[type].sort((a,b)=>b.s-a.s); R[type]=R[type].slice(0,10);
+  try{ localStorage.setItem('linkglove_rank',JSON.stringify(R)) }catch(e){}
+}
+function renderRank(){
+  const t=$('gmSel').value, L=(rankGet()[t]||[]);
+  $('gmRank').innerHTML=L.length?'<ol style="padding-left:20px">'+L.map(x=>`<li>${x.n}: <b>${x.s}</b> <small style="color:var(--mut)">${x.d}</small></li>`).join('')+'</ol>':'<small style="color:var(--mut)">Ainda sem pontuações neste jogo.</small>';
+}
+$('gmSel').onchange=renderRank; renderRank();
+
+// ---- perfis de treino ----
+const PROFS=(()=>{ try{ return JSON.parse(localStorage.getItem('linkglove_perfis')||'[]') }catch(e){ return [] } })();
+$('profSel').innerHTML=['',...PROFS].map(n=>`<option value="${n}" ${n===PROF?'selected':''}>${n||'(padrão)'}</option>`).join('');
+$('profSel').onchange=e=>{ try{ localStorage.setItem('linkglove_perfil',e.target.value) }catch(err){} location.reload(); };
+$('btnProf').onclick=()=>{
+  const n=(prompt('Nome do novo perfil (ex.: Ana):')||'').trim().replace(/[^\wÀ-ÿ-]/g,''); if(!n) return;
+  if(!PROFS.includes(n)) PROFS.push(n);
+  try{ localStorage.setItem('linkglove_perfis',JSON.stringify(PROFS)); localStorage.setItem('linkglove_perfil',n); }catch(err){}
+  location.reload();
+};
 
 loadVid(PLAYLIST_ID||VIDEOS[0][1], !!PLAYLIST_ID);
 translate();
