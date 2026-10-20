@@ -183,6 +183,7 @@ body.interp #side{top:50vh;height:50vh}
 @media(max-width:860px){.camgrid.game{grid-template-columns:1fr}}
 @media(max-width:860px){.tabs{flex-wrap:nowrap;margin:0;flex:1}.tabs button{flex:none}#side{overflow-x:auto}header{gap:8px}header h1{font-size:1.2rem}}
 @media(max-width:860px){.brand>div{display:none}}
+.cam video,.cam canvas.mirror{filter:brightness(var(--bri,1)) contrast(var(--con,1))}
 </style>
 </head>
 <body>
@@ -1140,11 +1141,11 @@ async function camStart(){
       hands.setOptions({maxNumHands:2, modelComplexity:0, minDetectionConfidence:0.6, minTrackingConfidence:0.6});
       hands.onResults(onHandResults);
     }
-    cam = new Camera(cv, {onFrame: async()=>{ await hands.send({image:cv}) }, width:640, height:480, facingMode:'user'});
+    cam = new Camera(cv, {onFrame: async()=>{ adapt(); await hands.send({image: LIGHT.on?enhance():cv}) }, width:640, height:480, facingMode:'user'});
     camBtn(null,true); camMsg('Iniciando câmera...');
     await cam.start();
     camOn = true; buf = []; held = null;
-    document.querySelectorAll('.coff').forEach(e=>e.style.display='none'); camBtn('Desligar câmera',false); camMsg(''); linkSay('confiante','Câmera ligada! Mostre a sua mão.');
+    document.querySelectorAll('.coff').forEach(e=>e.style.display='none'); camBtn('Desligar câmera',false); camMsg(''); linkSay('confiante','Câmera ligada! Mostre a sua mão.'); if(LIGHT.on) hwLight();
   }catch(err){
     camOn = false;
     camMsg(err.name==='NotAllowedError' ? 'Permissão da câmera negada. Libere o acesso no cadeado ao lado do endereço do site e tente de novo.'
@@ -1721,7 +1722,7 @@ function poseCheck(all,cl,now){
     prevR=c.r.slice(); jit=jit.filter(t=>now-t<1000);
     if(!msg&&jit.length>=3) msg='👆 Um dedo parece escondido atrás de outro. Gire um pouco a mão para a câmera ver todos os dedos.';
   } else prevR=null;
-  if(now-lightT>2500){ lightT=now; const lv=lightLevel(); lightMsg=lv===null?'':lv<45?'💡 Pouca luz: o reconhecimento piora no escuro.':lv>235?'💡 Imagem estourada: reduza a luz na câmera.':''; }
+  if(now-lightT>2500){ lightT=now; const lv=lightLevel(); lightMsg=lv===null?'':lv<45?(LIGHT.on?'💡 Ainda escuro: acenda uma luz de frente para você.':'💡 Pouca luz: toque em "Ajustar luz" ou acenda uma luz.'):lv>235?'💡 Imagem estourada: reduza a luz na câmera.':''; }
   if(!msg) msg=lightMsg;
   if(msg!==lastWarn){ lastWarn=msg; document.querySelectorAll('.poseWarn').forEach(e=>e.textContent=msg); }
 }
@@ -2303,6 +2304,54 @@ $('lsGo').onclick=()=>{ if(les.go) les.go(); };
 $('lsSkip').onclick=()=>{ if(les.on&&les.cam){ les.cam=false; lsNext(); } };
 $('lsX').onclick=()=>{ if(!les.on||confirm('Sair da lição? O progresso desta lição será perdido.')) lsClose(); };
 renderTrail();
+
+// ---- ajuste de luz: sobe o brilho da imagem que a câmera "enxerga" quando o local está escuro ----
+const LIGHT={on:!!ls('linkglove_luz',false),gain:1,con:1,last:0,hw:false};
+const lc=document.createElement('canvas'), lx=lc.getContext('2d',{willReadFrequently:true});
+function enhance(){
+  const w=cv.videoWidth, h=cv.videoHeight; if(!w) return cv;
+  if(lc.width!==w||lc.height!==h){ lc.width=w; lc.height=h; }
+  if('filter' in lx){ lx.filter='brightness('+LIGHT.gain.toFixed(2)+') contrast('+LIGHT.con.toFixed(2)+')'; lx.drawImage(cv,0,0,w,h); lx.filter='none'; }
+  else {   // navegadores sem filtro no canvas: ajuste manual dos pixels
+    lx.drawImage(cv,0,0,w,h); const d=lx.getImageData(0,0,w,h), a=d.data, g=LIGHT.gain;
+    for(let i=0;i<a.length;i+=4){ a[i]=Math.min(255,a[i]*g); a[i+1]=Math.min(255,a[i+1]*g); a[i+2]=Math.min(255,a[i+2]*g); }
+    lx.putImageData(d,0,0);
+  }
+  return lc;
+}
+function lightUI(){
+  document.documentElement.style.setProperty('--bri',LIGHT.on?LIGHT.gain.toFixed(2):'1'); document.documentElement.style.setProperty('--con',LIGHT.on?LIGHT.con.toFixed(2):'1');
+  document.querySelectorAll('.btnLight').forEach(b=>{ b.textContent=LIGHT.on?'💡 Luz ajustada ×'+LIGHT.gain.toFixed(1)+' (desligar)':'💡 Ajustar luz'; b.classList.toggle('primary',LIGHT.on); });
+}
+function adapt(force){
+  const now=performance.now(); if(!LIGHT.on||(!force&&now-LIGHT.last<1500)) return; LIGHT.last=now;
+  const lv=lightLevel(); if(lv===null) return;
+  const target=lv<115?Math.min(3.2,115/Math.max(lv,15)):lv>190?Math.max(0.6,150/lv):1;
+  LIGHT.gain+=(target-LIGHT.gain)*(force?1:0.5); LIGHT.con=LIGHT.gain>1.4?1.15:1; lightUI(); return lv;
+}
+async function hwLight(){   // tenta também a exposição da própria câmera (Chrome/Edge/Android; o Firefox não permite)
+  try{
+    const tr=cv.srcObject&&cv.srcObject.getVideoTracks()[0]; if(!tr||!tr.getCapabilities) return false;
+    const cap=tr.getCapabilities(), adv={};
+    if(cap.exposureMode&&cap.exposureMode.includes('continuous')) adv.exposureMode='continuous';
+    if(cap.exposureCompensation) adv.exposureCompensation=cap.exposureCompensation.max*0.7;
+    if(cap.brightness) adv.brightness=cap.brightness.min+(cap.brightness.max-cap.brightness.min)*0.7;
+    if(Object.keys(adv).length){ await tr.applyConstraints({advanced:[adv]}); LIGHT.hw=true; return true; }
+  }catch(e){}
+  return false;
+}
+async function toggleLight(){
+  if(!camOn){ camMsg('Ligue a câmera primeiro para ajustar a luz.'); return; }
+  if(LIGHT.on){ LIGHT.on=false; LIGHT.gain=1; LIGHT.con=1; lsSet('linkglove_luz',false); lightUI(); camMsg('Ajuste de luz desligado.'); return; }
+  LIGHT.on=true; lsSet('linkglove_luz',true); const hw=await hwLight(); await sleep(hw?1000:200);
+  const lv=adapt(true); lightUI();
+  const nivel=lv===null||lv===undefined?'':lv<45?'muito baixa':lv<80?'baixa':lv>190?'alta demais':'boa';
+  camMsg('Luz '+nivel+(lv!=null?' ('+Math.round(lv)+'/255)':'')+': brilho ×'+LIGHT.gain.toFixed(1)+(hw?' e exposição da câmera ajustados.':' ajustado na imagem.')+(lv<80?' Se puder, acenda uma luz de frente para você.':''));
+  linkSay('dica','Ajustei a luz! Fique de frente para a luz, não de costas.');
+}
+document.querySelectorAll('.btnCam').forEach(b=>{ const l=document.createElement('button'); l.className='btnLight'; l.textContent='💡 Ajustar luz'; b.after(l); });
+document.addEventListener('click',e=>{ if(e.target.closest('.btnLight')) toggleLight(); });
+lightUI();
 
 $('heroL').src=ART.link_big; $('heroN').src=ART.null_big; $('brandLogo').src=ART.logo; $('lkImg').src=ART.feliz; boxDraw();
 loadVid(PLAYLIST_ID||VIDEOS[0][1], !!PLAYLIST_ID);
