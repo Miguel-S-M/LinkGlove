@@ -294,7 +294,7 @@ body.interp #side{top:50vh;height:50vh}
 
 <div id="tab-cfg" class="pane">
 <section>
-  <div class="row" style="justify-content:space-between;margin-bottom:12px"><h2 style="margin:0">Configurar alfabeto – treino da IA</h2><button id="btnLock">🔒 Trancar</button></div>
+  <div class="row" style="justify-content:space-between;margin-bottom:12px"><h2 style="margin:0">Configurar alfabeto – treino da IA</h2><span style="display:flex;gap:8px;flex-wrap:wrap"><button id="btnPwChange">🔑 Trocar senha</button><button id="btnLock">🔒 Trancar</button></span></div>
   <div class="camgrid">
     <div class="cam"><canvas class="mirror"></canvas><div class="off coff">Câmera desligada</div></div>
     <div class="camside">
@@ -482,10 +482,12 @@ body.interp #side{top:50vh;height:50vh}
   <small id="nsMsg" style="color:var(--bad)"></small>
 </dialog>
 <dialog id="pwDlg">
-  <h3 style="margin:0 0 6px">Área protegida</h3>
-  <p style="color:var(--mut);margin-bottom:10px">Digite a frase para entrar em "Configurar alfabeto".</p>
+  <h3 id="pwTitle" style="margin:0 0 6px">Área protegida</h3>
+  <p id="pwDesc" style="color:var(--mut);margin-bottom:10px"></p>
+  <input type="password" id="pwOld" autocomplete="current-password" placeholder="Senha atual" aria-label="Senha atual" style="width:100%;margin-bottom:10px;display:none">
   <input type="password" id="pwIn" autocomplete="off" aria-label="Senha" style="width:100%;margin-bottom:10px">
-  <div class="row"><button id="pwOk" class="primary">Entrar</button><button id="pwCancel">Cancelar</button></div>
+  <input type="password" id="pwIn2" autocomplete="new-password" placeholder="Repita a senha" aria-label="Repita a senha" style="width:100%;margin-bottom:10px;display:none">
+  <div class="row"><button id="pwOk" class="primary">Entrar</button><button id="pwCancel">Cancelar</button><button id="pwForgot" style="display:none">Esqueci a senha</button></div>
   <small id="pwMsg" style="color:var(--bad)"></small>
 </dialog>
 <dialog id="signDlg">
@@ -1191,19 +1193,58 @@ async function camStop(){
 document.querySelectorAll('.btnCam').forEach(b=>b.onclick = () => camOn ? camStop() : camStart());
 // ================= Abas, treino, prática, frases, sinais, tela cheia =================
 const cyrb53=(str,seed=0)=>{let h1=0xdeadbeef^seed,h2=0x41c6ce57^seed;for(let i=0,ch;i<str.length;i++){ch=str.charCodeAt(i);h1=Math.imul(h1^ch,2654435761);h2=Math.imul(h2^ch,1597334677);}h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);return 4294967296*(2097151&h2)+(h1>>>0)};
-const PW_HASH = 4168855446176749;   // a senha só é pedida para entrar na aba (não é segurança de verdade: fica no código da página)
 let cfgUnlocked = false; try{ cfgUnlocked = sessionStorage.getItem('linkglove_cfg')==='1' }catch(e){}
 function goTab(t){
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x.dataset.tab===t));
   document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id==='tab-'+t));
 }
-function askPw(){ $('pwIn').value=''; $('pwMsg').textContent=''; $('pwDlg').showModal(); setTimeout(()=>$('pwIn').focus(),50); }
-function tryPw(){
-  if (cyrb53($('pwIn').value.trim())===PW_HASH){ cfgUnlocked=true; try{ sessionStorage.setItem('linkglove_cfg','1') }catch(e){} $('pwDlg').close(); goTab('cfg'); }
-  else { $('pwMsg').textContent='Frase incorreta.'; $('pwIn').select(); }
+// Senha da aba "Configurar alfabeto": cada pessoa cria a sua, guardada só neste dispositivo (hash com sal; não vai para a internet).
+// Não é segurança forte (os dados ficam no próprio navegador), serve para evitar mexidas sem querer.
+const PW_KEY='linkglove_cfgpw';
+const pwGet=()=>{ try{ return JSON.parse(localStorage.getItem(PW_KEY)||'null') }catch(e){ return null } };
+const pwHex=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
+async function pwHash(pw,salt,alg){
+  if(alg==='pbkdf2'){
+    const enc=new TextEncoder(), key=await crypto.subtle.importKey('raw',enc.encode(pw),'PBKDF2',false,['deriveBits']);
+    return pwHex(await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt:enc.encode(salt),iterations:150000},key,256));
+  }
+  return cyrb53(salt+'|'+pw).toString(16);
+}
+async function pwMake(pw){
+  const salt=pwHex(crypto.getRandomValues(new Uint8Array(16))), alg=(window.crypto&&crypto.subtle)?'pbkdf2':'cyrb';
+  return {alg,salt,h:await pwHash(pw,salt,alg)};
+}
+async function pwCheck(pw){ const r=pwGet(); if(!r) return false; try{ return (await pwHash(pw,r.salt,r.alg))===r.h; }catch(e){ return false; } }
+let pwMode='enter';
+function askPw(mode){
+  pwMode=mode||(pwGet()?'enter':'create');
+  const c=pwMode==='create', ch=pwMode==='change';
+  $('pwTitle').textContent=c?'Crie sua senha':ch?'Trocar senha':'Área protegida';
+  $('pwDesc').textContent=c?'Escolha uma senha (mínimo 4 caracteres) para proteger "Configurar alfabeto". Ela fica só neste dispositivo e cada pessoa cria a sua.':ch?'Digite a senha atual e escolha a nova.':'Digite a sua senha para entrar em "Configurar alfabeto".';
+  $('pwOld').style.display=ch?'':'none'; $('pwIn2').style.display=(c||ch)?'':'none'; $('pwForgot').style.display=pwMode==='enter'?'':'none';
+  $('pwIn').placeholder=(c||ch)?'Nova senha':'Senha'; $('pwOk').textContent=c?'Criar senha e entrar':ch?'Salvar nova senha':'Entrar';
+  ['pwOld','pwIn','pwIn2'].forEach(i=>$(i).value=''); $('pwMsg').textContent='';
+  $('pwDlg').showModal(); setTimeout(()=>$(ch?'pwOld':'pwIn').focus(),50);
+}
+function pwUnlock(){ cfgUnlocked=true; try{ sessionStorage.setItem('linkglove_cfg','1') }catch(e){} $('pwDlg').close(); goTab('cfg'); }
+async function tryPw(){
+  const a=$('pwIn').value.trim(), msg=t=>{ $('pwMsg').textContent=t; };
+  if(pwMode==='enter'){ if(await pwCheck(a)) pwUnlock(); else { msg('Senha incorreta.'); $('pwIn').select(); } return; }
+  if(pwMode==='change'&&!(await pwCheck($('pwOld').value.trim()))){ msg('A senha atual está incorreta.'); return; }
+  if(a.length<4){ msg('Use pelo menos 4 caracteres.'); return; }
+  if(a!==$('pwIn2').value.trim()){ msg('As duas senhas não são iguais.'); return; }
+  try{ localStorage.setItem(PW_KEY,JSON.stringify(await pwMake(a))); }catch(e){ msg('Não consegui salvar a senha: o armazenamento deste navegador está bloqueado.'); return; }
+  if(pwMode==='create') pwUnlock(); else { $('pwDlg').close(); toast('🔑 Senha alterada.'); }
 }
 $('pwOk').onclick=tryPw; $('pwCancel').onclick=()=>$('pwDlg').close();
-$('pwIn').addEventListener('keydown',e=>{ if(e.key==='Enter') tryPw(); });
+['pwOld','pwIn','pwIn2'].forEach(id=>$(id).addEventListener('keydown',e=>{ if(e.key==='Enter') tryPw(); }));
+$('pwForgot').onclick=()=>{
+  const t=prompt('Se você esqueceu a senha, é preciso APAGAR o treino do alfabeto e os sinais gravados neste dispositivo (de todos os perfis) para criar uma nova senha.\n\nDigite APAGAR para confirmar:');
+  if(!t||t.trim().toUpperCase()!=='APAGAR') return;
+  try{ Object.keys(localStorage).filter(k=>/^linkglove_(amostras|sinais|calib)/.test(k)).forEach(k=>localStorage.removeItem(k)); localStorage.removeItem(PW_KEY); sessionStorage.removeItem('linkglove_cfg'); }catch(e){}
+  location.reload();
+};
+$('btnPwChange').onclick=()=>askPw(pwGet()?'change':'create');
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
   if (b.dataset.tab==='cfg' && !cfgUnlocked){ askPw(); return; }
   goTab(b.dataset.tab);
