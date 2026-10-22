@@ -6,6 +6,8 @@
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#070d1a">
 <link rel="icon" type="image/webp" href="favicon.webp?v=1">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <title>LinkGlove – Luva tradutora de LIBRAS</title>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js" crossorigin="anonymous"></script>
@@ -72,10 +74,15 @@
         <small>Letra reconhecida pela câmera</small>
         <div class="bar" aria-hidden="true"><i id="camBar"></i></div>
       </div>
-      <div class="row"><button class="btnCam primary">Ligar câmera</button><button class="btnFace" aria-pressed="false">👤 Reconhecer rosto</button><button class="btnExpr" aria-pressed="false">😀 Expressões</button><button id="btnFull">⛶ Tela cheia</button></div>
-      <small class="faceSt" style="color:var(--mut)" role="status"></small>
-      <div class="row"><button class="btnLock">🔒 Travar nas minhas mãos</button><button class="btnUnlock" disabled>🔓 Soltar trava</button><button class="btnBg" aria-pressed="true">👥 Ignorar mãos do fundo: ligado</button></div>
-      <small class="lockSt" style="color:var(--mut)" role="status"></small>
+      <div class="row"><button class="btnCam primary">Ligar câmera</button><button id="btnFull">⛶ Tela cheia</button></div>
+      <details class="adv"><summary>⚙ Avançado da câmera (rosto, expressões, trava, fundo, offline)</summary>
+        <div class="row"><button class="btnFace" aria-pressed="false">👤 Reconhecer rosto</button><button class="btnExpr" aria-pressed="false">😀 Expressões</button></div>
+        <div class="row"><button class="btnLock">🔒 Travar nas minhas mãos</button><button class="btnUnlock" disabled>🔓 Soltar trava</button><button class="btnBg" aria-pressed="true">👥 Ignorar mãos do fundo: ligado</button></div>
+        <div class="row"><button class="btnOffline">📥 Preparar uso offline</button><button class="btnInstall" hidden>📲 Instalar app</button></div>
+        <small class="offSt" style="color:var(--mut);display:block" role="status"></small>
+      </details>
+      <small class="faceSt" style="color:var(--mut);display:block" role="status"></small>
+      <small class="lockSt" style="color:var(--mut);display:block" role="status"></small>
       <div class="cmsg" role="status"></div>
       <div class="poseWarn" role="status"></div>
       <small style="color:var(--mut)">Mantenha a mesma letra por 1 segundo para enviá-la ao texto. Para repetir a mesma letra, tire a mão da imagem um instante. Letras: A, B, C, D, E, F, G, I, L, O, R, U, V, W, Y (dedos para cima) e M, N, Q (dedos para baixo). Controle: mão aberta com polegar aberto = espaço, dois punhos = apagar, dois polegares para cima = falar a frase. Sinais: TUDO BEM (polegar para cima), PARAR (uma mão aberta sobre a outra), EU (apontar o indicador para si), FAMÍLIA (duas mãos em F que se afastam e se juntam) e 6-7 (as duas mãos sobem e descem alternadas).</small>
@@ -118,10 +125,15 @@
     <div class="cam"><canvas class="mirror"></canvas><div class="off coff">Câmera desligada</div></div>
     <div class="camside">
       <div class="big"><span id="gdT" style="font-size:2.4rem">–</span><small id="gdMsg">Treino guiado: a câmera pede cada letra e grava sozinha.</small></div>
-      <div class="row"><button class="btnCam primary">Ligar câmera</button><button class="btnFace" aria-pressed="false">👤 Reconhecer rosto</button><button class="btnExpr" aria-pressed="false">😀 Expressões</button><button id="btnGuide">Iniciar treino guiado</button></div>
-      <small class="faceSt" style="color:var(--mut)" role="status"></small>
-      <div class="row"><button class="btnLock">🔒 Travar nas minhas mãos</button><button class="btnUnlock" disabled>🔓 Soltar trava</button><button class="btnBg" aria-pressed="true">👥 Ignorar mãos do fundo: ligado</button></div>
-      <small class="lockSt" style="color:var(--mut)" role="status"></small>
+      <div class="row"><button class="btnCam primary">Ligar câmera</button><button id="btnGuide">Iniciar treino guiado</button></div>
+      <details class="adv"><summary>⚙ Avançado da câmera (rosto, expressões, trava, fundo, offline)</summary>
+        <div class="row"><button class="btnFace" aria-pressed="false">👤 Reconhecer rosto</button><button class="btnExpr" aria-pressed="false">😀 Expressões</button></div>
+        <div class="row"><button class="btnLock">🔒 Travar nas minhas mãos</button><button class="btnUnlock" disabled>🔓 Soltar trava</button><button class="btnBg" aria-pressed="true">👥 Ignorar mãos do fundo: ligado</button></div>
+        <div class="row"><button class="btnOffline">📥 Preparar uso offline</button><button class="btnInstall" hidden>📲 Instalar app</button></div>
+        <small class="offSt" style="color:var(--mut);display:block" role="status"></small>
+      </details>
+      <small class="faceSt" style="color:var(--mut);display:block" role="status"></small>
+      <small class="lockSt" style="color:var(--mut);display:block" role="status"></small>
       <label style="color:var(--mut)"><input type="checkbox" id="gdNum" style="min-width:0;flex:none"> incluir números 0–9</label>
       <div class="cmsg" role="status"></div>
     </div>
@@ -357,5 +369,6 @@
 <script src="js/17-online-rap.js?v=1"></script>
 <script src="js/18-online-corrida.js?v=1"></script>
 <script src="js/19-trilha-licoes.js?v=1"></script>
+<script src="js/20-offline.js?v=1"></script>
 </body>
 </html>

@@ -183,3 +183,13 @@ body.interp #side{top:50vh;height:50vh}
 #mpInfo{color:var(--mut);font-size:.85rem;margin-top:4px}
 #mpRoom{display:none;margin-top:8px;gap:10px;align-items:center;flex-wrap:wrap}
 #mpRoom b{font-size:1.6rem;letter-spacing:.2em;color:var(--acc)}
+
+/* Painel avançado da câmera */
+[hidden]{display:none!important}
+details.adv{margin:10px 0;border:1px solid var(--line);border-radius:12px;padding:8px 12px;background:rgba(0,229,255,.04)}
+details.adv>summary{font-weight:600;list-style:none}
+details.adv>summary::-webkit-details-marker{display:none}
+details.adv>summary::before{content:"▸ ";display:inline-block;transition:transform .15s}
+details.adv[open]>summary::before{content:"▾ "}
+details.adv[open]>summary{margin-bottom:8px}
+details.adv .row{margin:8px 0}
