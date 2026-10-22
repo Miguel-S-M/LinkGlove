@@ -19,6 +19,7 @@ function knn(f){
 }
 const EU_Z = 0.06;                        // ponta do indicador MAIS LONGE da câmera que a base = apontando para o corpo
 const GEST_WIN = 2500;                    // janela (ms) para gestos com movimento                        // abertura entre indicador e médio: acima = V, abaixo = U
+const FAM_MIN_F = 0.3;                    // FAMÍLIA: fração do gesto com as duas mãos em F (0 = aceita qualquer formato de mão)
 const CONN = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
 const cv = $('camVideo'), cc = $('camCanvas'), cx = cc.getContext('2d');
 let hands = null, cam = null, camOn = false, buf = [], held = null, heldSince = 0, sentLetter = false;
