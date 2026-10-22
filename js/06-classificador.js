@@ -1,0 +1,82 @@
+// Classificador de letras, gestos e estados dos modos
+
+function classify(lm, w, h){
+  const d = (a,b) => Math.hypot((lm[a].x-lm[b].x)*w, (lm[a].y-lm[b].y)*h);
+  const size = d(0,9);
+  const r = [8,12,16,20].map((t,i) => d(t,0) / d([5,9,13,17][i],0));
+  const st = r.map((v,i) => v>=EXT[i] ? 'E' : v<=CURL[i] ? 'C' : 'H');
+  const thumb = d(4,17)/size, tOut = thumb > THUMB_OUT;
+  const gap = d(8,12)/d(5,9), cg = d(4,8)/size, cm = d(4,12)/size, thI = Math.min(d(4,6),d(4,7))/size;   // thI: polegar na frente do indicador
+  // direção dos dedos: pulso -> base do dedo médio (cima / baixo / lado)
+  const vx=(lm[9].x-lm[0].x)*w, vy=(lm[9].y-lm[0].y)*h, k=vy/Math.hypot(vx,vy);
+  const dir = k<-0.5 ? 'cima' : k>0.5 ? 'baixo' : 'lado', down = dir==='baixo';
+  // indicador e médio cruzados (R): a ponta do indicador passa da ponta do médio
+  const ux=(lm[9].x-lm[5].x)*w, uy=(lm[9].y-lm[5].y)*h;
+  const cr = (((lm[8].x-lm[12].x)*w)*ux + ((lm[8].y-lm[12].y)*h)*uy) / Math.hypot(ux,uy) / size;
+  const crossed = cr > 0.05;
+  const dz = lm[8].z - lm[5].z;
+  const tx = (lm[8].x-lm[0].x)*w, ty = (lm[8].y-lm[0].y)*h;
+  const toward = (0.5-lm[0].x)*tx>0 && Math.abs(tx)>0.7*size && Math.abs(ty)<1.5*Math.abs(tx);   // indicador aponta para o centro do corpo (até ~55° da horizontal)
+  const tvy = (lm[4].y-lm[2].y)*h, thumbUp = tvy < -0.45*size && Math.abs((lm[4].x-lm[2].x)*w) < Math.abs(tvy);   // polegar apontando para cima
+  const [i,m,a,p] = st, E = x=>x==='E', C = x=>x==='C';
+  const nH = st.filter(x=>x==='H').length, ravg = (r[0]+r[1]+r[2]+r[3])/4;
+  let L = null;
+  if (down && E(i)&&E(m)&&!E(p)) L = a==='C' ? 'N' : 'M';           // dedos para baixo: anelar esticado/meio = M, dobrado = N
+  else if (E(m)&&E(a)&&E(p)&&!tOut&&!down&&(!E(i)||thI<0.35)) L='F';   // indicador dobrado ou escondido atrás do polegar
+  else if (E(i)&&E(m)&&E(a)&&E(p)&&tOut&&!down) L='ESPACO';   // mão aberta com o polegar aberto = espaço
+  else if (E(i)&&E(m)&&E(a)&&E(p)&&!tOut&&!down) L='B';
+  else if (E(i)&&E(m)&&E(a)&&C(p)) L = 'W';
+  else if (E(i)&&E(m)&&C(a)&&C(p)&&tOut&&gap<=V_GAP&&!down) L='F';
+  else if (E(i)&&E(m)&&C(a)&&C(p)&&!tOut) L = crossed ? 'R' : gap>V_GAP ? 'V' : 'U';
+  else if (E(i)&&!E(m)&&!E(a)&&!E(p)) L = tOut ? (down?null:'L') : toward ? 'EU' : down ? 'Q' : dir!=='cima' ? null : cm<0.4 ? 'D' : 'G';
+  else if (E(p)&&C(i)&&C(m)&&C(a)) L = tOut ? 'Y' : 'I';
+  else if (!tOut && dz>EU_Z && !C(i) && !E(m)&&!E(a)&&!E(p)) L='EU';
+  else if (!st.some(E) && st.filter(C).length>=3 && tOut && thumbUp) L='TUDO BEM';   // joinha
+  else if (cg<0.3 && nH>=2 && !st.some(E)) L='O';
+  else if (st.every(C)) L='A';
+  else if (!tOut && !st.some(E) && nH>=1 && ravg<=1.4 && cg<=0.55) L='E';   // dedos dobrados, polegar por baixo, perto das pontas
+  else if (nH>=3 && !st.some(E) && cg>0.55 && cg<1.4) L='C';
+  const f = [r[0],r[1],r[2],r[3],thumb,gap,cg,cm,k*1.5,cr*3,d(4,6)/size,d(4,7)/size];
+  const rule = L; const kn = knn(f); if (kn) L = kn;
+  return {L, rule, st, r, thumb, gap, dir, cr, dz, cg, thI, f, size, open: st.every(E)};
+}
+
+function camSend(L){
+  const now = performance.now();
+  if (!L){ held=null; sentLetter=false; $('camBar').style.width='0'; $('camBig').classList.remove('sent'); return; }
+  if (L!==held){ held=L; heldSince=now; sentLetter=false; $('camBig').classList.remove('sent'); }
+  if (sentLetter) return;
+  const p = Math.min(1,(now-heldSince)/HOLD_MS);
+  $('camBar').style.width = (p*100)+'%';
+  if (p>=1){ sentLetter=true; $('camBig').classList.add('sent'); onData(L,'cam'); }   // mesma função da luva Bluetooth
+}
+
+let hist = [], gestLock = 0, gdbg = '', rec = null, recN = 0;
+const prac = {on:false, t:null, t0:0, lock:false, score:0};
+const game = {on:false, type:null, score:0, end:0, target:null, idx:0, t0:0, lock:false, hold:null, timer:null};
+let gd = null;
+function detectGesture(){
+  const fr = hist.filter(f=>f.h.length===2);
+  // PARAR: duas mãos abertas, uma sobre a outra, paradas por ~0,7 s
+  const tN = fr.length ? fr[fr.length-1].t : 0, rc = fr.filter(f=>tN-f.t<=900);
+  if (rc.length>=6 && rc[rc.length-1].t-rc[0].t>=600){
+    const ok = rc.filter(f=>{const [p,q]=f.h; if(!p.open||!q.open) return false; const z=(p.sz+q.sz)/2, dx=Math.abs(p.cx-q.cx)/z, dy=Math.abs(p.cy-q.cy)/z; return dx<=1.2 && dy>=0.3 && dy<=2.2}).length;
+    if (ok/rc.length>=0.8) return 'PARAR';
+    const okF = rc.filter(f=>f.h.every(q=>q.fist)).length, okT = rc.filter(f=>f.h.every(q=>q.tu)).length;
+    if (okF/rc.length>=0.8) return 'APAGAR';     // dois punhos: apaga a última letra
+    if (okT/rc.length>=0.8) return 'ENVIAR';     // dois polegares para cima: fala a frase
+  }
+  if (fr.length<10 || fr[fr.length-1].t-fr[0].t<900) return null;
+  const A=fr.map(f=>f.h[0].y), B=fr.map(f=>f.h[1].y), D=fr.map(f=>Math.abs(f.h[1].x-f.h[0].x));
+  const rng=a=>Math.max(...a)-Math.min(...a);
+  const flips=a=>{let n=0,last=0,ref=a[0];for(const v of a){const d=v-ref;if(Math.abs(d)>0.025){const sg=Math.sign(d);if(last&&sg!==last)n++;last=sg;ref=v}}return n};
+  const corr=(a,b)=>{const n=a.length,ma=a.reduce((x,y)=>x+y)/n,mb=b.reduce((x,y)=>x+y)/n;let sab=0,saa=0,sbb=0;for(let i=0;i<n;i++){sab+=(a[i]-ma)*(b[i]-mb);saa+=(a[i]-ma)**2;sbb+=(b[i]-mb)**2}return sab/Math.sqrt(saa*sbb||1)};
+  // FAMÍLIA: as duas mãos se afastam e voltam a se juntar (qualquer formato de mão), com algum movimento vertical do círculo
+  const mx=Math.max(...D), Y=fr.map(f=>(f.h[0].y+f.h[1].y)/2);
+  gdbg=`Δ mãos ${rng(D).toFixed(2)} (precisa ≥0.12) · vertical ${rng(Y).toFixed(2)} (≥0.03) · A ${rng(A).toFixed(2)} B ${rng(B).toFixed(2)}`;
+  if (rng(D)>=0.12 && D[0]<mx-0.06 && D[D.length-1]<mx-0.06 && rng(Y)>=0.03) return 'FAMILIA';
+  // 6-7: as duas mãos sobem e descem alternadas
+  if (rng(A)>=0.06 && rng(B)>=0.06 && flips(A)>=2 && flips(B)>=2 && corr(A,B)<-0.3 && rng(D)<0.25) return 'SEIS SETE';
+  return null;
+}
+

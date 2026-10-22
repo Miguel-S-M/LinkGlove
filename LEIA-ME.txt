@@ -1,0 +1,13 @@
+LinkGlove - site separado em arquivos
+
+index.html      -> só a estrutura da página
+style.css       -> visual (cores, layout)
+favicon.webp    -> ícone da aba
+assets/arte     -> imagens do Link, Null e cenários
+assets/letras   -> imagens do alfabeto manual
+js/imagens.js   -> lista dos caminhos das imagens
+js/01-... 19-   -> o código, dividido por assunto. A ORDEM DOS NÚMEROS IMPORTA (index.html carrega nessa ordem).
+
+Para publicar no GitHub Pages: envie TODOS os arquivos mantendo as pastas (index.html na raiz).
+Depois de mudar um arquivo, suba o número ?v=1 para ?v=2 no index.html se o navegador mostrar a versão antiga.
+O backup do site em arquivo único é o index-um-arquivo.html.
