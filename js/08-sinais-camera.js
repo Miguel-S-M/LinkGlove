@@ -78,7 +78,7 @@ function onHandResults(res){
   }
   const v = all.length ? frameVec(all,cl) : null;
   if (sgRec && v && curTab==='cfg') sgRec.frames.push({t:now,v});
-  hist.push({t:now, v, h:all.map((lm,i)=>({x:lm[0].x, y:lm[9].y, F:cl[i].L==='F', fist:cl[i].st.every(x=>x==='C'), tu:cl[i].L==='TUDO BEM', open:cl[i].open, cx:lm[9].x*w, cy:lm[9].y*h, sz:cl[i].size}))});
+  hist.push({t:now, v, h:all.map((lm,i)=>({x:lm[0].x, y:lm[9].y, F:cl[i].L==='F', Fg:(cl[i].cg<0.5 && cl[i].st[0]!=='E' && cl[i].st[1]==='E' && cl[i].st[2]==='E' && cl[i].st[3]==='E'), fist:cl[i].st.every(x=>x==='C'), tu:cl[i].L==='TUDO BEM', open:cl[i].open, cx:lm[9].x*w, cy:lm[9].y*h, sz:cl[i].size}))});
   while (hist.length && now-hist[0].t>GEST_WIN) hist.shift();
   const rc6 = hist.filter(f=>now-f.t<=600 && f.h.length), xs6 = rc6.map(f=>f.h[0].x), ys6 = rc6.map(f=>f.h[0].y);
   const mvNow = rc6.length>3 ? Math.max(Math.max(...xs6)-Math.min(...xs6), Math.max(...ys6)-Math.min(...ys6)) : 0;

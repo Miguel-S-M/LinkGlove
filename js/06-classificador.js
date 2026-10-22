@@ -71,16 +71,19 @@ function detectGesture(){
   const rng=a=>Math.max(...a)-Math.min(...a);
   const flips=a=>{let n=0,last=0,ref=a[0];for(const v of a){const d=v-ref;if(Math.abs(d)>0.025){const sg=Math.sign(d);if(last&&sg!==last)n++;last=sg;ref=v}}return n};
   const corr=(a,b)=>{const n=a.length,ma=a.reduce((x,y)=>x+y)/n,mb=b.reduce((x,y)=>x+y)/n;let sab=0,saa=0,sbb=0;for(let i=0;i<n;i++){sab+=(a[i]-ma)*(b[i]-mb);saa+=(a[i]-ma)**2;sbb+=(b[i]-mb)**2}return sab/Math.sqrt(saa*sbb||1)};
-  // FAMÍLIA (LIBRAS): as duas mãos em F começam juntas, se afastam desenhando um círculo e voltam a se juntar.
-  // Exige: ambas as mãos se mexem, começam E terminam juntas, o ponto mais aberto fica no meio do gesto,
-  // as mãos ficam na mesma altura e (por padrão) estão em formato de F durante parte do gesto.
+  // FAMÍLIA (LIBRAS): as duas mãos em F começam juntas, se afastam desenhando UM círculo lento e voltam a se juntar.
+  // Não é: bater palma (rápido, repete), aproximar as mãos (começa afastada), mãos abertas/fechadas (formato errado).
   const mx=Math.max(...D), Y=fr.map(f=>(f.h[0].y+f.h[1].y)/2);
   const avg=a=>a.reduce((x,y)=>x+y,0)/a.length, k=Math.min(3,fr.length);
   const d0=avg(D.slice(0,k)), d1=avg(D.slice(-k)), iMax=D.indexOf(mx)/(D.length-1);
   const X0=fr.map(f=>f.h[0].x), X1=fr.map(f=>f.h[1].x), lvl=avg(fr.map(f=>Math.abs(f.h[0].y-f.h[1].y)));
-  const fF=fr.filter(f=>f.h[0].F&&f.h[1].F).length/fr.length;
-  gdbg=`FAMÍLIA: abre ${rng(D).toFixed(2)} (≥0.18) · começa junta ${(mx-d0).toFixed(2)} e termina junta ${(mx-d1).toFixed(2)} (≥0.15) · pico em ${(iMax*100).toFixed(0)}% (15–85) · mãos movem ${rng(X0).toFixed(2)}/${rng(X1).toFixed(2)} (≥0.05) · vertical ${rng(Y).toFixed(2)} (≥0.03) · desnível ${lvl.toFixed(2)} (≤0.2) · mãos em F ${(fF*100).toFixed(0)}% (≥${FAM_MIN_F*100}%)`;
-  if (rng(D)>=0.18 && mx-d0>=0.15 && mx-d1>=0.15 && iMax>=0.15 && iMax<=0.85 && rng(X0)>=0.05 && rng(X1)>=0.05 && rng(Y)>=0.03 && lvl<=0.2 && fF>=FAM_MIN_F) return 'FAMILIA';
+  const fG=fr.filter(f=>f.h[0].Fg&&f.h[1].Fg).length/fr.length;                 // formato de F medido pela geometria da mão
+  const T=fr.map(f=>f.t), Ds=D.map((v,i)=>avg(D.slice(Math.max(0,i-1),i+2)));  // distância entre as mãos, suavizada
+  const lo=Math.min(...Ds), hi=Math.max(...Ds), up=lo+0.6*(hi-lo), dn=lo+0.4*(hi-lo);
+  let ep=0, on=false, t0=0, dur=0; for(let i=0;i<Ds.length;i++){ if(!on&&Ds[i]>up){ on=true; ep++; t0=T[i]; } else if(on&&Ds[i]<dn){ on=false; dur=Math.max(dur,T[i]-t0); } } if(on) dur=Math.max(dur,T[T.length-1]-t0);
+  let vmax=0; for(let i=0;i+2<Ds.length;i++){ const dt=(T[i+2]-T[i])/1000; if(dt>0.04) vmax=Math.max(vmax,Math.abs(Ds[i+2]-Ds[i])/dt); }
+  gdbg=`FAMÍLIA: abre ${rng(D).toFixed(2)} (≥0.18) · começa junta ${(mx-d0).toFixed(2)} / termina junta ${(mx-d1).toFixed(2)} (≥0.15) · pico ${(iMax*100).toFixed(0)}% (15–85) · mãos movem ${rng(X0).toFixed(2)}/${rng(X1).toFixed(2)} (≥0.05) · vertical ${rng(Y).toFixed(2)} (≥0.03) · desnível ${lvl.toFixed(2)} (≤0.2) · F ${(fG*100).toFixed(0)}% (≥${FAM_MIN_F*100}%) · aberturas ${ep} (=1) · aberta ${(dur/1000).toFixed(1)}s (≥0.35) · velocidade ${vmax.toFixed(1)} (≤1.8)`;
+  if (rng(D)>=0.18 && mx-d0>=0.15 && mx-d1>=0.15 && iMax>=0.15 && iMax<=0.85 && rng(X0)>=0.05 && rng(X1)>=0.05 && rng(Y)>=0.03 && lvl<=0.2 && fG>=FAM_MIN_F && ep===1 && dur>=350 && vmax<=1.8) return 'FAMILIA';
   // 6-7: as duas mãos sobem e descem alternadas
   if (rng(A)>=0.06 && rng(B)>=0.06 && flips(A)>=2 && flips(B)>=2 && corr(A,B)<-0.3 && rng(D)<0.25) return 'SEIS SETE';
   return null;

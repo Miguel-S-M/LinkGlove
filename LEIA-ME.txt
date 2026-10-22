@@ -7,6 +7,7 @@ assets/arte     -> imagens do Link, Null e cenários
 assets/letras   -> imagens do alfabeto manual
 js/imagens.js   -> lista dos caminhos das imagens
 sw.js           -> service worker (modo offline)
+subir-versao.py -> rode antes de publicar para o navegador pegar a versão nova
 manifest.webmanifest + icons/ -> permitem instalar o site como app
 js/01-... 20-   -> o código, dividido por assunto (20-offline.js = painel Avançado e modo offline). A ORDEM DOS NÚMEROS IMPORTA (index.html carrega nessa ordem).
 
@@ -19,5 +20,6 @@ MODO OFFLINE
 - Na aba Tradutor ou Configurar: abra "Avançado da câmera" e toque em "Preparar uso offline" UMA VEZ, com internet.
   Isso salva as bibliotecas e modelos de mãos, rosto e expressões. Depois o site abre e roda sem internet.
 - Jogos online (PeerJS) continuam precisando de internet.
-- Ao mudar qualquer arquivo: aumente VERSION no sw.js (ex.: '2') e troque ?v=1 por ?v=2 no index.html e em js/imagens.js.
+- Ao mudar qualquer arquivo: rode  python subir-versao.py  (sobe VERSION no sw.js e o ?v= no index.html e js/imagens.js) e publique tudo.
+  Sem isso o navegador pode continuar usando a versão antiga guardada para o modo offline.
 - Arquivo novo? Acrescente o nome na lista APP_FILES do sw.js (com o mesmo ?v=).
